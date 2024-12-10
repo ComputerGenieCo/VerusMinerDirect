@@ -16,6 +16,6 @@ aclocal && autoheader && automake --add-missing --gnu --copy && autoconf || echo
 
 extracflags="-march=native "
 
-./configure CXXFLAGS="$extracflags
+./configure CXXFLAGS="$extracflags"
 
 make 

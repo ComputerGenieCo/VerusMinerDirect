@@ -1,25 +1,21 @@
-AC_INIT([ccminer_CPU], [3.8.3], [], [ccminer], [http://github.com/monkins1010/ccminer])
+AC_INIT([ccminerCPU], [3.8.3], [http://github.com/ComputerGenieCo/VerusMinerDirect/issues], [ccminerCPU], [http://github.com/ComputerGenieCo/VerusMinerDirect])
 
 AC_PREREQ([2.59c])
-AC_CANONICAL_SYSTEM
+AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([ccminer.cpp])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_CONFIG_HEADERS([ccminer-config.h])
 
-dnl Make sure anyone changing configure.ac/Makefile.am has a clue
-AM_MAINTAINER_MODE
+AM_MAINTAINER_MODE([enable])
 
 dnl Checks for programs
-AC_PROG_CC_C99
-AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
+AC_PROG_CXX
 AM_PROG_AS
 AC_PROG_RANLIB
-AC_PROG_CXX
 AC_OPENMP
 
 dnl Checks for header files
-AC_HEADER_STDC
 AC_CHECK_HEADERS([sys/endian.h sys/param.h syslog.h])
 # sys/sysctl.h requires sys/types.h on FreeBSD
 # sys/sysctl.h requires sys/param.h on OpenBSD
