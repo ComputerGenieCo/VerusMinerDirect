@@ -1,4 +1,3 @@
-
 ccminer
 *.o
 
@@ -16,12 +15,9 @@ missing
 install-sh
 stamp-h1
 ccminer-config.h*
-compile
 config.log
 config.status
 config.status.lineno
-config.guess
-config.sub
 
 mingw32-config.cache
 
@@ -67,4 +63,3 @@ compat/curl-for-windows/
 *.cudafe1.cpp
 *.cudafe1.c
 *.cudafe2.c
-
