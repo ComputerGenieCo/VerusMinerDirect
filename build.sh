@@ -8,12 +8,14 @@ export CPPFLAGS="-I/usr/local/opt/openssl/include"
 export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"
 fi
 
-make distclean || echo clean
+make distclean || echo "Ran clean previous"
 
 rm -f Makefile.in
 rm -f config.status
-./autogen.sh || echo done
+aclocal && autoheader && automake --add-missing --gnu --copy && autoconf || echo "Run conf done"
 
-./configure.sh
+extracflags="-march=native "
+
+./configure CXXFLAGS="$extracflags
 
 make 
