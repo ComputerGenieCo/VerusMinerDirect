@@ -158,30 +158,38 @@ extern int gpu_threads;
 // Also, auto hide LOG_DEBUG if --debug (-D) is not used
 void gpulog(int prio, int thr_id, const char *fmt, ...)
 {
-	char _ALIGN(128) pfmt[128];
-	char _ALIGN(128) line[256];
-	int len, dev_id = device_map[thr_id % MAX_GPUS];
-	va_list ap;
+    char _ALIGN(128) pfmt[128];
+    char _ALIGN(128) line[256];
+    int len;
+    va_list ap;
 
-	if (prio == LOG_DEBUG && !opt_debug)
-		return;
+    if (prio == LOG_DEBUG && !opt_debug)
+        return;
 
+    snprintf(pfmt, sizeof(pfmt), "CPU T%d: Verus Hashing - ", thr_id);
 
-	len = snprintf(pfmt, 128, "CPU T%d: Verus Hashing", thr_id, fmt);
+    if (fmt == NULL) {
+        snprintf(line, sizeof(line), "%s", pfmt);
+    } else {
+        va_start(ap, fmt);
+        vsnprintf(line, sizeof(line), fmt, ap);
+        va_end(ap);
+        memmove(line + strlen(pfmt), line, strlen(line) + 1);
+        memcpy(line, pfmt, strlen(pfmt));
+    }
 
-	pfmt[sizeof(pfmt)-1]='\0';
-
-	va_start(ap, fmt);
-
-	if (len && vsnprintf(line, sizeof(line), pfmt, ap)) {
-		line[sizeof(line)-1]='\0';
-		applog(prio, "%s", line);
-	} else {
-		fprintf(stderr, "%s OOM!\n", __func__);
-	}
-
-	va_end(ap);
+    if (*line) {
+        char *pos = strstr(line, "(null), ");
+        if (pos != NULL) {
+            memmove(pos, pos + 8, strlen(pos + 8) + 1);
+        }
+        applog(prio, "%s", line);
+    } else {
+        fprintf(stderr, "%s OOM!\n", __func__);
+    }
 }
+
+
 
 /* Get default config.json path (system specific) */
 void get_defconfig_path(char *out, size_t bufsize, char *argv0)
@@ -214,18 +222,18 @@ void format_hashrate_unit(double hashrate, char *output, const char *unit)
 {
 	char prefix[2] = { 0, 0 };
 
-	if (hashrate < 10000) {
+	if (hashrate < 1e4) {
 		// nop
 	}
-	else if (hashrate < 1e7) {
+	else if (hashrate < 1e6) {
 		prefix[0] = 'k';
 		hashrate *= 1e-3;
 	}
-	else if (hashrate < 1e10) {
+	else if (hashrate < 1e9) {
 		prefix[0] = 'M';
 		hashrate *= 1e-6;
 	}
-	else if (hashrate < 1e13) {
+	else if (hashrate < 1e12) {
 		prefix[0] = 'G';
 		hashrate *= 1e-9;
 	}
