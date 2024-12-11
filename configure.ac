@@ -1,4 +1,4 @@
-AC_INIT([ccminerCPU], [3.8.3], [http://github.com/ComputerGenieCo/VerusMinerDirect/issues], [ccminerCPU], [http://github.com/ComputerGenieCo/VerusMinerDirect])
+AC_INIT([ccminerCPU], [3.9.0], [http://github.com/ComputerGenieCo/VerusMinerDirect/issues], [ccminerCPU], [http://github.com/ComputerGenieCo/VerusMinerDirect])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_TARGET
