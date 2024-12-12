@@ -43,9 +43,7 @@
 #include "miner.h"
 #include "algos.h"
 
-#include "equi/equihash.h"
-
-//#include <cuda_runtime.h>
+#define EQNONCE_OFFSET 30
 
 #ifdef WIN32
 #include <Mmsystem.h>

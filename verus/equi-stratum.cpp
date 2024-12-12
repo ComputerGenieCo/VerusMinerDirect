@@ -9,7 +9,7 @@
 #include <cmath>
 #include <miner.h>
 
-#include "equihash.h"
+#define EQNONCE_OFFSET 30
 
 extern struct stratum_ctx stratum;
 extern pthread_mutex_t stratum_work_lock;
