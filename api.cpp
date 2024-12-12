@@ -33,8 +33,6 @@
 
 #include "miner.h"
 
-#include "algos.h"
-
 #ifndef WIN32
 # include <errno.h>
 # include <sys/socket.h>
@@ -215,19 +213,12 @@ static char *getpoolnfo(char *params)
 	if (stratum.job.xnonce2) {
 		/* used temporary to be sure all is ok */
 		sprintf(extra, "0x");
-		if (p->algo == ALGO_DECRED) {
-			char compat[32] = { 0 };
-			cbin2hex(&extra[2], (const char*) stratum.xnonce1, min(36, stratum.xnonce2_size));
-			cbin2hex(compat, (const char*) stratum.job.xnonce2, 4);
-			memcpy(&extra[2], compat, 8); // compat extranonce
-		} else {
-			cbin2hex(&extra[2], (const char*) stratum.job.xnonce2, stratum.xnonce2_size);
-		}
+		cbin2hex(&extra[2], (const char*) stratum.job.xnonce2, stratum.xnonce2_size);
 	}
 
-	snprintf(s, MYBUFSIZ, "POOL=%s;ALGO=%s;URL=%s;USER=%s;SOLV=%d;ACC=%d;REJ=%d;STALE=%u;H=%u;JOB=%s;DIFF=%.6f;"
+	snprintf(s, MYBUFSIZ, "POOL=%s;URL=%s;USER=%s;SOLV=%d;ACC=%d;REJ=%d;STALE=%u;H=%u;JOB=%s;DIFF=%.6f;"
 		"BEST=%.6f;N2SZ=%d;N2=%s;PING=%u;DISCO=%u;WAIT=%u;UPTIME=%u;LAST=%u|",
-		strlen(p->name) ? p->name : p->short_url, algo_names[p->algo],
+		strlen(p->name) ? p->name : p->short_url,
 		p->url, p->type & POOL_STRATUM ? p->user : "",
 		p->solved_count, p->accepted_count, p->rejected_count, p->stales_count,
 		stratum.job.height, jobid, stratum_diff, p->best_share,
@@ -1299,6 +1290,11 @@ void *api_thread(void *userdata)
 }
 
 /* to be able to report the default value set in each algo */
+static uint32_t algo_throughput[MAX_GPUS][1] = { 0 };
+void bench_set_throughput(int thr_id, uint32_t throughput)
+{
+	algo_throughput[thr_id][1] = throughput;
+}
 void api_set_throughput(int thr_id, uint32_t throughput)
 {
 	if (thr_id < MAX_GPUS && thr_info) {

@@ -10,7 +10,7 @@
  */
 
 //#define _GNU_SOURCE
-#include <ccminer-config.h>
+#include <miner-config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1182,9 +1182,6 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 	}
 	xn2_size = (int) json_integer_value(json_array_get(params, pndx+1));
 	if (!xn2_size) {
-		char algo[64] = { 0 };
-		get_currentalgo(algo, sizeof(algo));
-		if (strcmp(algo, "verus") == 0) {
 			int xn1_size = (int)strlen(xnonce1) / 2;
 			xn2_size = 32 - xn1_size;
 			if (xn1_size < 3 || xn1_size > 12) {
@@ -1193,10 +1190,7 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 				goto out;
 			}
 			goto skip_n2;
-		} else {
-			applog(LOG_ERR, "Failed to get extranonce2_size");
-			goto out;
-		}
+
 	}
 	if (xn2_size < 2 || xn2_size > 16) {
 		applog(LOG_ERR, "Failed to get valid n2size in parse_extranonce (%d)", xn2_size);

@@ -84,6 +84,16 @@ extern u128 rc0[40];
   *(u64 *)(out + 16) = *(((u64 *)&s2 + 0)); \
   *(u64 *)(out + 24) = *(((u64 *)&s3 + 0));
 
+#define AES4_zero(s0, s1, s2, s3, rci) \
+  s0 = _mm_aesenc_si128(s0, rc0[rci]); \
+  s1 = _mm_aesenc_si128(s1, rc0[rci + 1]); \
+  s2 = _mm_aesenc_si128(s2, rc0[rci + 2]); \
+  s3 = _mm_aesenc_si128(s3, rc0[rci + 3]); \
+  s0 = _mm_aesenc_si128(s0, rc0[rci + 4]); \
+  s1 = _mm_aesenc_si128(s1, rc0[rci + 5]); \
+  s2 = _mm_aesenc_si128(s2, rc0[rci + 6]); \
+  s3 = _mm_aesenc_si128(s3, rc0[rci + 7]);
+
 void load_constants();
 void test_implementations();
 

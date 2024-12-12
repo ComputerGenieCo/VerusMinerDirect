@@ -1,10 +1,10 @@
-AC_INIT([ccminerCPU], [3.9.0], [http://github.com/ComputerGenieCo/VerusMinerDirect/issues], [ccminerCPU], [http://github.com/ComputerGenieCo/VerusMinerDirect])
+AC_INIT([VerusMinerDirect], [3.9.0], [http://github.com/ComputerGenieCo/VerusMinerDirect/issues], [ccminerCPU], [http://github.com/ComputerGenieCo/VerusMinerDirect])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_TARGET
-AC_CONFIG_SRCDIR([ccminer.cpp])
+AC_CONFIG_SRCDIR([miner.cpp])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
-AC_CONFIG_HEADERS([ccminer-config.h])
+AC_CONFIG_HEADERS([miner-config.h])
 
 AM_MAINTAINER_MODE([enable])
 

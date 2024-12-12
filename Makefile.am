@@ -13,13 +13,13 @@ EXTRA_DIST		= autogen.sh README.md README.txt LICENSE.txt \
 
 SUBDIRS = compat
 
-bin_PROGRAMS = ccminer
+bin_PROGRAMS = VerusMinerDirect
 
-ccminer_SOURCES	= elist.h miner.h compat.h \
+VerusMinerDirect_SOURCES	= elist.h miner.h compat.h \
 			  compat/inttypes.h compat/stdbool.h compat/unistd.h bignum.cpp bignum.hpp \
 			  compat/sys/time.h compat/getopt/getopt.h \
 			  crc32.c \
-			  ccminer.cpp pools.cpp util.cpp bench.cpp \
+			  miner.cpp pools.cpp util.cpp \
 			  api.cpp hashlog.cpp stats.cpp sysinfos.cpp \
 			  verus/equi-stratum.cpp verus/verusscan.cpp \
 			  verus/haraka.c verus/verus_clhash.cpp
@@ -27,20 +27,19 @@ ccminer_SOURCES	= elist.h miner.h compat.h \
 
 
 if HAVE_WINDOWS
-ccminer_SOURCES += compat/winansi.c
+VerusMinerDirect_SOURCES += compat/winansi.c
 endif
 
-ccminer_LDFLAGS  = $(PTHREAD_FLAGS)
+VerusMinerDirect_LDFLAGS  = $(PTHREAD_FLAGS)
 
-ccminer_LDADD    = -lcurl @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ @OPENMP_CFLAGS@ @LIBS@
-ccminer_CPPFLAGS = @OPENMP_CFLAGS@ $(CPPFLAGS) $(PTHREAD_FLAGS) -march=native -fno-strict-aliasing $(JANSSON_INCLUDES) $(DEF_INCLUDES) -O2
+VerusMinerDirect_LDADD    = -lcurl @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ @OPENMP_CFLAGS@ @LIBS@
+VerusMinerDirect_CPPFLAGS = @OPENMP_CFLAGS@ $(CPPFLAGS) $(PTHREAD_FLAGS) -march=native -msse2avx -O3 -flto -fno-strict-aliasing $(JANSSON_INCLUDES) $(DEF_INCLUDES)
 
 
 if HAVE_OSX
-ccminer_CXXFLAGS = -std=c++11
-ccminer_CPPFLAGS += -I/usr/local/llvm/lib/clang/4.0.0/include
+VerusMinerDirect_CXXFLAGS = -std=c++11
+VerusMinerDirect_CPPFLAGS += -I/usr/local/llvm/lib/clang/4.0.0/include
 endif
 
-
-
-
+gitclean:
+	git clean -fxd

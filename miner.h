@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include <ccminer-config.h>
+#include <miner-config.h>
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -285,7 +285,7 @@ extern int scanhash_verus(int thr_id, struct work* work, uint32_t max_nonce, uns
 
 
 /* free device allocated memory per algo */
-void algo_free_all(int thr_id);
+///void algo_free_all(int thr_id);
 
 
 
@@ -519,14 +519,6 @@ double bn_hash_target_ratio(uint32_t* hash, uint32_t* target);
 void bn_store_hash_target_ratio(uint32_t* hash, uint32_t* target, struct work* work, int nonce);
 void bn_set_target_ratio(struct work* work, uint32_t* hash, int nonce);
 void work_set_target_ratio(struct work* work, uint32_t* hash);
-
-// bench
-extern int bench_algo;
-void bench_init(int threads);
-void bench_free();
-bool bench_algo_switch_next(int thr_id);
-void bench_set_throughput(int thr_id, uint32_t throughput);
-void bench_display_results();
 
 struct stratum_job {
 	char *job_id;

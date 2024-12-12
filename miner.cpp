@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2010 Jeff Garzik
  * Copyright 2012-2014 pooler
  * Copyright 2014-2017 tpruvot
@@ -9,7 +9,7 @@
  * any later version.  See COPYING for more details.
  */
 
-#include <ccminer-config.h>
+#include <miner-config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,7 +41,6 @@
 #endif
 
 #include "miner.h"
-#include "algos.h"
 
 #define EQNONCE_OFFSET 30
 
@@ -113,7 +112,7 @@ int opt_timeout = 300; // curl
 int opt_scantime = 10;
 static json_t *opt_config;
 static const bool opt_time = true;
-volatile enum sha_algos opt_algo = ALGO_AUTO;
+extern char* opt_algo = "ALGO_EQUIHASH";
 int opt_n_threads = 0;
 int gpu_threads = 1;
 int64_t opt_affinity = -1L;
@@ -569,18 +568,12 @@ static bool get_blocktemplate(CURL *curl, struct work *work);
 
 void get_currentalgo(char* buf, int sz)
 {
-	int algo = opt_algo;
-	if (algo == ALGO_CRYPTONIGHT)
-		algo = get_cryptonight_algo(cryptonight_fork);
-	snprintf(buf, sz, "%s", algo_names[algo]);
+	snprintf(buf, sz, "%s", opt_algo);
 }
 
 void format_hashrate(double hashrate, char *output)
 {
-	if (opt_algo == ALGO_EQUIHASH)
-		format_hashrate_unit(hashrate, output, "H/s");
-	else
-		format_hashrate_unit(hashrate, output, "H/s");
+	format_hashrate_unit(hashrate, output, "H/s");
 }
 
 /**
@@ -660,13 +653,8 @@ bool jobj_binary(const json_t *obj, const char *key, void *buf, size_t buflen)
 /* compute nbits to get the network diff */
 static void calc_network_diff(struct work *work)
 {
-	
-	if (opt_algo == ALGO_EQUIHASH) {
-            // net_diff = equi_network_diff(work);
             net_diff = verus_network_diff(work);
             return;
-	}
-	
 }
 
 /* decode data from getwork (wallets and longpoll pools) */
@@ -676,27 +664,8 @@ static bool work_decode(const json_t *val, struct work *work)
 	int adata_sz, atarget_sz = ARRAY_SIZE(work->target);
 	int i;
 
-	switch (opt_algo) {
-	case ALGO_DECRED:
-		data_size = 192;
-		adata_sz = 180/4;
-		break;
-	case ALGO_PHI2:
-		data_size = 144;
-		adata_sz = data_size / 4;
-		break;
-	case ALGO_NEOSCRYPT:
-	case ALGO_ZR5:
-		data_size = 80;
-		adata_sz = data_size / 4;
-		break;
-	case ALGO_CRYPTOLIGHT:
-	case ALGO_CRYPTONIGHT:
-	
-	default:
-		data_size = 128;
-		adata_sz = data_size / 4;
-	}
+	data_size = 128;
+	adata_sz = data_size / 4;
 
 	if (!jobj_binary(val, "data", work->data, data_size)) {
 		json_t *obj = json_object_get(val, "data");
@@ -718,22 +687,12 @@ static bool work_decode(const json_t *val, struct work *work)
 		return false;
 	}
 
-	if (opt_algo == ALGO_HEAVY) {
-		if (unlikely(!jobj_binary(val, "maxvote", &work->maxvote, sizeof(work->maxvote)))) {
-			work->maxvote = 2048;
-		}
-	} else work->maxvote = 0;
+	work->maxvote = 0;
 
 	for (i = 0; i < adata_sz; i++)
 		work->data[i] = le32dec(work->data + i);
 	for (i = 0; i < atarget_sz; i++)
 		work->target[i] = le32dec(work->target + i);
-
-	if (opt_algo == ALGO_PHI2) {
-		for (i = 20; i < 36; i++) if (work->data[i]) {
-			use_roots = 1; break;
-		}
-	}
 
 	if ((opt_showdiff || opt_max_diff > 0.) && !allow_mininginfo)
 		calc_network_diff(work);
@@ -744,63 +703,9 @@ static bool work_decode(const json_t *val, struct work *work)
 	stratum_diff = work->targetdiff;
 
 	work->tx_count = use_pok = 0;
-	if (opt_algo == ALGO_ZR5 && work->data[0] & POK_BOOL_MASK) {
-		use_pok = 1;
-		json_t *txs = json_object_get(val, "txs");
-		if (txs && json_is_array(txs)) {
-			size_t idx, totlen = 0;
-			json_t *p;
-
-			json_array_foreach(txs, idx, p) {
-				const int tx = work->tx_count % POK_MAX_TXS;
-				const char* hexstr = json_string_value(p);
-				size_t txlen = strlen(hexstr)/2;
-				work->tx_count++;
-				if (work->tx_count > POK_MAX_TXS || txlen >= POK_MAX_TX_SZ) {
-					// when tx is too big, just reset use_pok for the block
-					use_pok = 0;
-					if (opt_debug) applog(LOG_WARNING,
-						"pok: large block ignored, tx len: %u", txlen);
-					work->tx_count = 0;
-					break;
-				}
-				hex2bin((uchar*)work->txs[tx].data, hexstr, min(txlen, POK_MAX_TX_SZ));
-				work->txs[tx].len = (uint32_t) (txlen);
-				totlen += txlen;
-			}
-			if (opt_debug)
-				applog(LOG_DEBUG, "block txs: %u, total len: %u", work->tx_count, totlen);
-		}
-	}
 
 	/* use work ntime as job id (solo-mining) */
 	cbin2hex(work->job_id, (const char*)&work->data[17], 4);
-
-	if (opt_algo == ALGO_DECRED) {
-		uint16_t vote;
-		// always keep last bit of votebits
-		memcpy(&vote, &work->data[25], 2);
-		vote = (opt_vote << 1) | (vote & 1);
-		memcpy(&work->data[25], &vote, 2);
-		// some random extradata to make it unique
-		work->data[36] = (rand()*4);
-		work->data[37] = (rand()*4) << 8;
-		// required for the longpoll pool block info...
-		work->height = work->data[32];
-		if (!have_longpoll && work->height > net_blocks + 1) {
-			char netinfo[64] = { 0 };
-			if (opt_showdiff && net_diff > 0.) {
-				if (net_diff != work->targetdiff)
-					sprintf(netinfo, ", diff %.3f, pool %.1f", net_diff, work->targetdiff);
-				else
-					sprintf(netinfo, ", diff %.3f", net_diff);
-			}
-			applog(LOG_BLUE, "%s block %d%s",
-				algo_names[opt_algo], work->height, netinfo);
-			net_blocks = work->height - 1;
-		}
-		cbin2hex(work->job_id, (const char*)&work->data[34], 4);
-	}
 
 	return true;
 }
@@ -888,7 +793,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 
 	/* discard if a newer block was received */
 	stale_work = work->height && work->height < g_work.height;
-	if (have_stratum && !stale_work && !opt_submit_stale && opt_algo != ALGO_ZR5 && opt_algo != ALGO_SCRYPT_JANE) {
+	if (have_stratum && !stale_work && !opt_submit_stale) {
 		pthread_mutex_lock(&g_work_lock);
 		if (strlen(work->job_id + 8))
 			stale_work = strncmp(work->job_id + 8, g_work.job_id + 8, sizeof(g_work.job_id) - 8);
@@ -915,10 +820,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		}
 	}
 
-	if (!stale_work && opt_algo == ALGO_ZR5 && !have_stratum) {
-		stale_work = (memcmp(&work->data[1], &g_work.data[1], 68));
-	}
-
 	if (!submit_old && stale_work) {
 		if (opt_debug)
 			applog(LOG_WARNING, "stale work detected, discarding");
@@ -931,47 +832,8 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		char *ntimestr, *noncestr, *xnonce2str, *nvotestr;
 		uint16_t nvote = 0;
 
-		switch (opt_algo) {
-		case ALGO_BLAKE:
-		case ALGO_BLAKECOIN:
-		case ALGO_BLAKE2S:
-		case ALGO_BMW:
-		case ALGO_SHA256D:
-		case ALGO_SHA256T:
-		case ALGO_VANILLA:
-			// fast algos require that... (todo: regen hash)
-			check_dups = true;
-			le32enc(&ntime, work->data[17]);
-			le32enc(&nonce, work->data[19]);
-			break;
-		case ALGO_DECRED:
-			be16enc(&nvote, *((uint16_t*)&work->data[25]));
-			be32enc(&ntime, work->data[34]);
-			be32enc(&nonce, work->data[35]);
-			break;
-		case ALGO_HEAVY:
-			le32enc(&ntime, work->data[17]);
-			le32enc(&nonce, work->data[19]);
-			be16enc(&nvote, *((uint16_t*)&work->data[20]));
-			break;
-		case ALGO_LBRY:
-			check_dups = true;
-			le32enc(&ntime, work->data[25]);
-			//le32enc(&nonce, work->data[27]);
-			break;
-		case ALGO_SIA:
-			be32enc(&ntime, work->data[10]);
-			be32enc(&nonce, work->data[8]);
-			break;
-		case ALGO_ZR5:
-			check_dups = true;
-			be32enc(&ntime, work->data[17]);
-			be32enc(&nonce, work->data[19]);
-			break;
-		default:
-			le32enc(&ntime, work->data[17]);
-			le32enc(&nonce, work->data[19]);
-		}
+		le32enc(&ntime, work->data[17]);
+		le32enc(&nonce, work->data[19]);
 		noncestr = bin2hex((const uchar*)(&nonce), 4);
 
 		if (check_dups)
@@ -991,14 +853,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 
 		ntimestr = bin2hex((const uchar*)(&ntime), 4);
 
-		if (opt_algo == ALGO_DECRED) {
-			xnonce2str = bin2hex((const uchar*)&work->data[36], stratum.xnonce1_size);
-		} else if (opt_algo == ALGO_SIA) {
-			uint16_t high_nonce = swab32(work->data[9]) >> 16;
-			xnonce2str = bin2hex((unsigned char*)(&high_nonce), 2);
-		} else {
-			xnonce2str = bin2hex(work->xnonce2, work->xnonce2_len);
-		}
+		xnonce2str = bin2hex(work->xnonce2, work->xnonce2_len);
 
 		// store to keep/display the solved ratio/diff
 		stratum.sharediff = work->sharediff[idnonce];
@@ -1042,20 +897,9 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		/* build hex string */
 		char *str = NULL;
 
-		if (opt_algo == ALGO_ZR5) {
-			data_size = 80; adata_sz = 20;
-		}
-		else if (opt_algo == ALGO_DECRED) {
-			data_size = 192; adata_sz = 180/4;
-		}
-		else if (opt_algo == ALGO_PHI2 && use_roots) {
-			data_size = 144; adata_sz = 36;
-		}
-		
 
-		if (opt_algo != ALGO_HEAVY && opt_algo != ALGO_MJOLLNIR) {
-			for (int i = 0; i < adata_sz; i++)
-				le32enc(work->data + i, work->data[i]);
+		for (int i = 0; i < adata_sz; i++) {
+			le32enc(work->data + i, work->data[i]);
 		}
 		str = bin2hex((uchar*)work->data, data_size);
 		if (unlikely(!str)) {
@@ -1118,10 +962,10 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
 						strcat(netinfo, srate);
 					}
 					applog(LOG_BLUE, "%s block %d, %s",
-						algo_names[opt_algo], work->height, netinfo);
+						opt_algo, work->height, netinfo);
 				} else {
 					applog(LOG_BLUE, "%s %s block %d", short_url,
-						algo_names[opt_algo], work->height);
+						opt_algo, work->height);
 				}
 				g_work.height = work->height;
 			}
@@ -1429,14 +1273,9 @@ bool get_work(struct thr_info *thr, struct work *work)
 		memset(work->data, 0x55, 76);
 		//work->data[17] = swab32((uint32_t)time(NULL));
 		memset(work->data + 19, 0x00, 52);
-		if (opt_algo == ALGO_DECRED) {
-			memset(&work->data[35], 0x00, 52);
-		} else if (opt_algo == ALGO_LBRY) {
-			work->data[28] = 0x80000000;
-		} else {
-			work->data[20] = 0x80000000;
-			work->data[31] = 0x00000280;
-		}
+		work->data[20] = 0x80000000;
+		work->data[31] = 0x00000280;
+
 		memset(work->target, 0x00, sizeof(work->target));
 		return true;
 	}
@@ -1522,37 +1361,9 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 	work->pooln = sctx->pooln;
 
 	/* Generate merkle root */
-	switch (opt_algo) {
-		case ALGO_DECRED:
-		case ALGO_EQUIHASH:
-		case ALGO_SIA:
-			// getwork over stratum, no merkle to generate
-			break;
-#ifdef WITH_HEAVY_ALGO
-		case ALGO_HEAVY:
-		case ALGO_MJOLLNIR:
-			heavycoin_hash(merkle_root, sctx->job.coinbase, (int)sctx->job.coinbase_size);
-			break;
-#endif
-		case ALGO_FUGUE256:
-		case ALGO_GROESTL:
-		case ALGO_KECCAK:
-		case ALGO_BLAKECOIN:
-		case ALGO_WHIRLCOIN:
-			SHA256((uchar*)sctx->job.coinbase, sctx->job.coinbase_size, (uchar*)merkle_root);
-			break;
-		case ALGO_WHIRLPOOL:
-		default:
-			SHA256((uchar*)sctx->job.coinbase, sctx->job.coinbase_size, (uchar*)merkle_root);
-	}
 
 	for (i = 0; i < sctx->job.merkle_count; i++) {
 		memcpy(merkle_root + 32, sctx->job.merkle[i], 32);
-#ifdef WITH_HEAVY_ALGO
-		if (opt_algo == ALGO_HEAVY || opt_algo == ALGO_MJOLLNIR)
-			heavycoin_hash(merkle_root, merkle_root, 64);
-		else
-#endif
 			
 	}
 	
@@ -1565,145 +1376,24 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 	for (i = 0; i < 8; i++)
 		work->data[1 + i] = le32dec((uint32_t *)sctx->job.prevhash + i);
 
-	if (opt_algo == ALGO_DECRED) {
-		uint16_t vote;
-		for (i = 0; i < 8; i++) // reversed prevhash
-			work->data[1 + i] = swab32(work->data[1 + i]);
-		// decred header (coinb1) [merkle...nonce]
-		memcpy(&work->data[9], sctx->job.coinbase, 108);
-		// last vote bit should never be changed
-		memcpy(&vote, &work->data[25], 2);
-		vote = (opt_vote << 1) | (vote & 1);
-		memcpy(&work->data[25], &vote, 2);
-		// extradata
-		if (sctx->xnonce1_size > sizeof(work->data)-(32*4)) {
-			// should never happen...
-			applog(LOG_ERR, "extranonce size overflow!");
-			sctx->xnonce1_size = sizeof(work->data)-(32*4);
-		}
-		memcpy(&work->data[36], sctx->xnonce1, sctx->xnonce1_size);
-		work->data[37] = (rand()*4) << 8; // random work data
-		// block header suffix from coinb2 (stake version)
-		memcpy(&work->data[44], &sctx->job.coinbase[sctx->job.coinbase_size-4], 4);
-		sctx->job.height = work->data[32];
-		//applog_hex(work->data, 180);
-	} else if (opt_algo == ALGO_EQUIHASH) {
-		memcpy(&work->data[9], sctx->job.coinbase, 32+32); // merkle [9..16] + reserved
-		work->data[25] = le32dec(sctx->job.ntime);
-		work->data[26] = le32dec(sctx->job.nbits);
-		memcpy(&work->solution, sctx->job.solution,1344);
-		memcpy(&work->data[27], sctx->xnonce1, sctx->xnonce1_size & 0x1F); // pool extranonce
-		work->data[35] = 0x80;
-		//applog_hex(work->data, 140);
-	} else if (opt_algo == ALGO_LBRY) {
-		for (i = 0; i < 8; i++)
-			work->data[9 + i] = be32dec((uint32_t *)merkle_root + i);
-		for (i = 0; i < 8; i++)
-			work->data[17 + i] = ((uint32_t*)sctx->job.extra)[i];
-		work->data[25] = le32dec(sctx->job.ntime);
-		work->data[26] = le32dec(sctx->job.nbits);
-		work->data[28] = 0x80000000;
-	} else if (opt_algo == ALGO_PHI2) {
-		for (i = 0; i < 8; i++)
-			work->data[9 + i] = be32dec((uint32_t *)merkle_root + i);
-		work->data[17] = le32dec(sctx->job.ntime);
-		work->data[18] = le32dec(sctx->job.nbits);
-		for (i = 0; i < 16; i++)
-			work->data[20 + i] = ((uint32_t*)sctx->job.extra)[i];
-	} else if (opt_algo == ALGO_SIA) {
-		uint32_t extra = 0;
-		memcpy(&extra, &sctx->job.coinbase[32], 2);
-		for (i = 0; i < 8; i++) // reversed hash
-			work->data[i] = ((uint32_t*)sctx->job.prevhash)[7-i];
-		work->data[8] = 0; // nonce
-		work->data[9] = swab32(extra) | ((rand() << 8) & 0xffff);
-		work->data[10] = be32dec(sctx->job.ntime);
-		work->data[11] = be32dec(sctx->job.nbits);
-		memcpy(&work->data[12], sctx->job.coinbase, 32); // merkle_root
-		work->data[20] = 0x80000000;
-		if (opt_debug) applog_hex(work->data, 80);
-	} else {
-		for (i = 0; i < 8; i++)
-			work->data[9 + i] = be32dec((uint32_t *)merkle_root + i);
-		work->data[17] = le32dec(sctx->job.ntime);
-		work->data[18] = le32dec(sctx->job.nbits);
-		work->data[20] = 0x80000000;
-		work->data[31] = (opt_algo == ALGO_MJOLLNIR) ? 0x000002A0 : 0x00000280;
-	}
+	memcpy(&work->data[9], sctx->job.coinbase, 32+32); // merkle [9..16] + reserved
+	work->data[25] = le32dec(sctx->job.ntime);
+	work->data[26] = le32dec(sctx->job.nbits);
+	memcpy(&work->solution, sctx->job.solution,1344);
+	memcpy(&work->data[27], sctx->xnonce1, sctx->xnonce1_size & 0x1F); // pool extranonce
+	work->data[35] = 0x80;
+	//applog_hex(work->data, 140);
 
 	if (opt_showdiff || opt_max_diff > 0.)
 		calc_network_diff(work);
 
-	switch (opt_algo) {
-	case ALGO_MJOLLNIR:
-	case ALGO_HEAVY:
-	case ALGO_ZR5:
-		for (i = 0; i < 20; i++)
-			work->data[i] = swab32(work->data[i]);
-		break;
-	}
-
-	// HeavyCoin (vote / reward)
-	if (opt_algo == ALGO_HEAVY) {
-		work->maxvote = 2048;
-		uint16_t *ext = (uint16_t*)(&work->data[20]);
-		ext[0] = opt_vote;
-		ext[1] = be16dec(sctx->job.nreward);
-		// applog(LOG_DEBUG, "DEBUG: vote=%hx reward=%hx", ext[0], ext[1]);
-	}
-
 	pthread_mutex_unlock(&stratum_work_lock);
-
-	if (opt_debug && opt_algo != ALGO_DECRED && opt_algo != ALGO_EQUIHASH && opt_algo != ALGO_SIA) {
-		uint32_t utm = work->data[17];
-		if (opt_algo != ALGO_ZR5) utm = swab32(utm);
-		char *tm = atime2str(utm - sctx->srvtime_diff);
-		char *xnonce2str = bin2hex(work->xnonce2, sctx->xnonce2_size);
-		applog(LOG_DEBUG, "DEBUG: job_id=%s xnonce2=%s time=%s",
-		       work->job_id, xnonce2str, tm);
-		free(tm);
-		free(xnonce2str);
-	}
 
 	if (opt_difficulty == 0.)
 		opt_difficulty = 1.;
 
-	switch (opt_algo) {
-		case ALGO_HMQ1725:
-		case ALGO_JACKPOT:
-		case ALGO_JHA:
-		case ALGO_NEOSCRYPT:
-		case ALGO_SCRYPT:
-		case ALGO_SCRYPT_JANE:
-			work_set_target(work, sctx->job.diff / (65536.0 * opt_difficulty));
-			break;
-		case ALGO_ALLIUM:
-		case ALGO_DMD_GR:
-		case ALGO_FRESH:
-		case ALGO_FUGUE256:
-		case ALGO_GROESTL:
-		case ALGO_KECCAKC:
-		case ALGO_LBRY:
-		case ALGO_LYRA2v2:
-		case ALGO_LYRA2Z:
-		case ALGO_PHI2:
-		case ALGO_TIMETRAVEL:
-		case ALGO_BITCORE:
-		case ALGO_X16R:
-		case ALGO_X16S:
-			work_set_target(work, sctx->job.diff / (256.0 * opt_difficulty));
-			break;
-		case ALGO_KECCAK:
-		case ALGO_LYRA2:
-			work_set_target(work, sctx->job.diff / (128.0 * opt_difficulty));
-			break;
-		case ALGO_EQUIHASH:
-			memcpy(work->target, sctx->job.extra, 32);
-			equi_work_set_target(work, sctx->job.diff / opt_difficulty);
-			break;
-		default:
-			work_set_target(work, sctx->job.diff / opt_difficulty);
-	}
+	memcpy(work->target, sctx->job.extra, 32);
+	equi_work_set_target(work, sctx->job.diff / opt_difficulty);
 
 	if (stratum_diff != sctx->job.diff) {
 		char sdiff[32] = { 0 };
@@ -1847,27 +1537,17 @@ static void *miner_thread(void *userdata)
 		bool regen = false;
 
 		// &work.data[19]
-		int wcmplen = (opt_algo == ALGO_DECRED) ? 140 : 76;
+		int wcmplen = 76;
 		int wcmpoft = 0;
-
-		if (opt_algo == ALGO_LBRY) wcmplen = 108;
-		else if (opt_algo == ALGO_SIA) {
-			wcmpoft = (32+16)/4;
-			wcmplen = 32;
-		}
 
 		uint32_t *nonceptr = (uint32_t*) (((char*)work.data) + wcmplen);
 
-		if (opt_algo == ALGO_EQUIHASH) {
-			nonceptr = &work.data[EQNONCE_OFFSET]; // 27 is pool extranonce (256bits nonce space)
-			wcmplen = 4+32+32;
-		}
+		nonceptr = &work.data[EQNONCE_OFFSET]; // 27 is pool extranonce (256bits nonce space)
+		wcmplen = 4+32+32;
 
 		if (have_stratum) {
 			uint32_t sleeptime = 0;
 
-			if (opt_algo == ALGO_DECRED || opt_algo == ALGO_WILDKECCAK /* getjob */)
-				work_done = true; // force "regen" hash
 			while (!work_done && time(NULL) >= (g_work_time + opt_scantime)) {
 				usleep(100*1000);
 				if (sleeptime > 4) {
@@ -1883,9 +1563,6 @@ static void *miner_thread(void *userdata)
 			extrajob |= work_done;
 
 			regen = (nonceptr[0] >= end_nonce);
-			if (opt_algo == ALGO_SIA) {
-				regen = ((nonceptr[1] & 0xFF00) >= 0xF000);
-			}
 			regen = regen || extrajob;
 
 			if (regen) {
@@ -1893,8 +1570,6 @@ static void *miner_thread(void *userdata)
 				extrajob = false;
 				if (stratum_gen_work(&stratum, &g_work))
 					g_work_time = time(NULL);
-				if (opt_algo == ALGO_CRYPTONIGHT || opt_algo == ALGO_CRYPTOLIGHT)
-					nonceptr[0] += 0x100000;
 			}
 		} else {
 			uint32_t secs = 0;
@@ -1951,11 +1626,9 @@ static void *miner_thread(void *userdata)
 		} else
 			nonceptr[0]++; //??
 
-		if (opt_algo == ALGO_EQUIHASH) {
-		    //nonceptr[1] = (rand()*4);
-			nonceptr[2] = rand() << 24 | rand() << 8 | thr_id;
-			//applog_hex(&work.data[27], 32);
-		} 
+	    //nonceptr[1] = (rand()*4);
+		nonceptr[2] = rand() << 24 | rand() << 8 | thr_id;
+		//applog_hex(&work.data[27], 32);
 
 		pthread_mutex_unlock(&g_work_lock);
 
@@ -1978,8 +1651,8 @@ static void *miner_thread(void *userdata)
 		{
 			// reset default mem offset before idle..
 
-			// free gpu resources
-			algo_free_all(thr_id);
+			// free gpu resources LMFAO, no!!
+			//algo_free_all(thr_id);
 			// clear any free error (algo switch)
 			//cuda_clear_lasterror();
 
@@ -2091,72 +1764,6 @@ static void *miner_thread(void *userdata)
 		/* on start, max64 should not be 0,
 		 *    before hashrate is computed */
 		if (max64 < minmax) {
-			switch (opt_algo) {
-			case ALGO_BLAKECOIN:
-			case ALGO_BLAKE2S:
-			case ALGO_VANILLA:
-				minmax = 0x80000000U;
-				break;
-			case ALGO_BLAKE:
-			case ALGO_BMW:
-			case ALGO_DECRED:
-			case ALGO_SHA256D:
-			case ALGO_SHA256T:
-			//case ALGO_WHIRLPOOLX:
-				minmax = 0x40000000U;
-				break;
-			case ALGO_KECCAK:
-			case ALGO_KECCAKC:
-			case ALGO_LBRY:
-			case ALGO_LUFFA:
-			case ALGO_SIA:
-			case ALGO_SKEIN:
-			case ALGO_SKEIN2:
-			case ALGO_TRIBUS:
-				minmax = 0x1000000;
-				break;
-			case ALGO_ALLIUM:
-			case ALGO_C11:
-			case ALGO_DEEP:
-			case ALGO_HEAVY:
-			case ALGO_JACKPOT:
-			case ALGO_JHA:
-			case ALGO_HSR:
-			case ALGO_LYRA2v2:
-			case ALGO_PHI:
-			case ALGO_PHI2:
-			case ALGO_POLYTIMOS:
-			case ALGO_S3:
-			case ALGO_SKUNK:
-			case ALGO_TIMETRAVEL:
-			case ALGO_BITCORE:
-			case ALGO_X11EVO:
-			case ALGO_X11:
-			case ALGO_X12:
-			case ALGO_X13:
-			case ALGO_WHIRLCOIN:
-			case ALGO_WHIRLPOOL:
-				minmax = 0x400000;
-				break;
-			case ALGO_X14:
-			case ALGO_X15:
-				minmax = 0x300000;
-				break;
-			case ALGO_LYRA2:
-			case ALGO_LYRA2Z:
-			case ALGO_NEOSCRYPT:
-			case ALGO_SIB:
-			case ALGO_SCRYPT:
-			case ALGO_SONOA:
-			case ALGO_VELTOR:
-				minmax = 0x80000;
-				break;
-			case ALGO_CRYPTOLIGHT:
-			case ALGO_CRYPTONIGHT:
-			case ALGO_SCRYPT_JANE:
-				minmax = 0x1000;
-				break;
-			}
 			max64 = max(minmax-1, max64);
 		}
 
@@ -2203,20 +1810,7 @@ static void *miner_thread(void *userdata)
 		work.valid_nonces = 0;
 
 		/* scan nonces for a proof-of-work hash */
-		switch (opt_algo) {
-
-		
-		case ALGO_EQUIHASH:
-			rc = scanhash_verus(thr_id, &work, max_nonce, &hashes_done);
-			break;
-		
-
-		default:
-			/* should never happen */
-			goto out;
-		}
-
-		
+		rc = scanhash_verus(thr_id, &work, max_nonce, &hashes_done);	
 
 		if (abort_flag)
 			break; // time to leave the mining loop...
@@ -2272,10 +1866,6 @@ static void *miner_thread(void *userdata)
 				nonceptr[0] = UINT32_MAX;
 		}
 
-		// only required to debug purpose
-		if (opt_debug && check_dups && opt_algo != ALGO_DECRED && opt_algo != ALGO_EQUIHASH && opt_algo != ALGO_SIA)
-			hashlog_remember_scan_range(&work);
-
 		/* output */
 		if (!opt_quiet && loopcnt > 1 && (time(NULL) - tm_rate_log) > opt_maxlograte) {
 			format_hashrate(thr_hashrates[thr_id], s);
@@ -2291,7 +1881,7 @@ static void *miner_thread(void *userdata)
 			for (int i = 0; i < opt_n_threads && thr_hashrates[i]; i++)
 				hashrate += stats_get_speed(i, thr_hashrates[i]);
 			pthread_mutex_unlock(&stats_lock);
-			if (opt_benchmark && bench_algo == -1 && loopcnt > 2) {
+			if (opt_benchmark && loopcnt > 2) {
 				format_hashrate(hashrate, s);
 				applog(LOG_NOTICE, "Total: %s", s);
 			}
@@ -2334,10 +1924,6 @@ static void *miner_thread(void *userdata)
 			if (rc > 1 && work.nonces[1]) {
 				work.submit_nonce_id = 1;
 				nonceptr[0] = work.nonces[1];
-				if (opt_algo == ALGO_ZR5) {
-					work.data[0] = work.data[22]; // pok
-					work.data[22] = 0;
-				}
 				if (!submit_work(mythr, &work))
 					break;
 				nonceptr[0] = curnonce;
@@ -2386,12 +1972,8 @@ wait_lp_url:
 	// to detect pool switch during loop
 	switchn = pool_switch_count;
 
-	if (opt_algo == ALGO_SIA) {
-		goto out;
-	}
-
 	/* full URL */
-	else if (strstr(hdr_path, "://")) {
+	if (strstr(hdr_path, "://")) {
 		lp_url = hdr_path;
 		hdr_path = NULL;
 	}
@@ -2452,7 +2034,7 @@ longpoll_retry:
 						sprintf(&netinfo[strlen(netinfo)], ", target %.3f", g_work.targetdiff);
 					}
 					if (g_work.height)
-						applog(LOG_BLUE, "%s block %u%s", algo_names[opt_algo], g_work.height, netinfo);
+						applog(LOG_BLUE, "%s block %u%s", opt_algo, g_work.height, netinfo);
 					else
 						applog(LOG_BLUE, "%s detected new block%s", short_url, netinfo);
 				}
@@ -2626,10 +2208,10 @@ wait_stratum_url:
 				if ((!opt_quiet || !firstwork_time) && stratum.job.height != last_block_height) {
 					last_block_height = stratum.job.height;
 					if (net_diff > 0.)
-						applog(LOG_BLUE, "%s block %d, diff %.3f", algo_names[opt_algo],
+						applog(LOG_BLUE, "%s block %d, diff %.3f", opt_algo,
 							stratum.job.height, net_diff);
 					else
-						applog(LOG_BLUE, "%s %s block %d", pool->short_url, algo_names[opt_algo],
+						applog(LOG_BLUE, "%s %s block %d", pool->short_url, opt_algo,
 							stratum.job.height);
 				}
 				restart_threads();
@@ -2704,15 +2286,6 @@ static void show_usage_and_exit(int status)
 	else
 		printf(usage);
 
-	if (opt_algo == ALGO_SCRYPT || opt_algo == ALGO_SCRYPT_JANE) {
-		printf(scrypt_usage);
-	}
-	else if (opt_algo == ALGO_CRYPTONIGHT || opt_algo == ALGO_CRYPTOLIGHT) {
-		printf(xmr_usage);
-	}
-	else if (opt_algo == ALGO_WILDKECCAK) {
-		printf(bbr_usage);
-	}
 	proper_exit(status);
 }
 
@@ -2725,50 +2298,7 @@ void parse_arg(int key, char *arg)
 
 	switch(key) {
 	case 'a': /* --algo */
-		p = strstr(arg, ":"); // optional factor
-		if (p) *p = '\0';
-
-		i = algo_to_int(arg);
-		if (i >= 0)
-			opt_algo = (enum sha_algos)i;
-		else {
-			applog(LOG_ERR, "Unknown algo parameter '%s'", arg);
-			show_usage_and_exit(1);
-		}
-
-		if (p) {
-			opt_nfactor = atoi(p + 1);
-			if (opt_algo == ALGO_SCRYPT_JANE) {
-				free(jane_params);
-				jane_params = strdup(p+1);
-			}
-		}
-		if (!opt_nfactor) {
-			switch (opt_algo) {
-			case ALGO_SCRYPT:      opt_nfactor = 9;  break;
-			case ALGO_SCRYPT_JANE: opt_nfactor = 14; break;
-			}
-		}
-
-		// cryptonight variants
-		switch (opt_algo) {
-		case ALGO_MONERO:
-			opt_algo = ALGO_CRYPTONIGHT;
-			cryptonight_fork = 7;
-			break;
-		case ALGO_GRAFT:
-			opt_algo = ALGO_CRYPTONIGHT;
-			cryptonight_fork = 8;
-			break;
-		case ALGO_STELLITE:
-			opt_algo = ALGO_CRYPTONIGHT;
-			cryptonight_fork = 3;
-			break;
-		case ALGO_CRYPTONIGHT:
-			cryptonight_fork = 1;
-			break;
-		}
-
+		opt_algo = "ALGO_EQUIHASH";
 		break;
 	case 'b':
 		p = strstr(arg, ":");
@@ -3344,12 +2874,6 @@ static void parse_cmdline(int argc, char *argv[])
 
 	parse_config(opt_config);
 
-	if (opt_algo == ALGO_HEAVY && opt_vote == 9999 && !opt_benchmark) {
-		fprintf(stderr, "%s: Heavycoin hash requires block reward vote parameter (see --vote)\n",
-			argv[0]);
-		show_usage_and_exit(1);
-	}
-
 	if (opt_vote == 9999) {
 		opt_vote = 0; // default, don't vote
 	}
@@ -3534,16 +3058,8 @@ int main(int argc, char *argv[])
 	cur_pooln = pool_get_first_valid(0);
 	pool_switch(-1, cur_pooln);
 
-	if (opt_algo == ALGO_DECRED || opt_algo == ALGO_SIA) {
-		allow_gbt = false;
-		allow_mininginfo = false;
-	}
 
-	if (opt_algo == ALGO_EQUIHASH) {
-		opt_extranonce = false; // disable subscribe
-	}
-
-
+	opt_extranonce = false; // disable subscribe
 
 	flags = !opt_benchmark && strncmp(rpc_url, "https:", 6)
 	      ? (CURL_GLOBAL_ALL & ~CURL_GLOBAL_SSL)
@@ -3732,7 +3248,7 @@ int main(int argc, char *argv[])
 	applog(LOG_INFO, "%d miner thread%s started, "
 		"using '%s' algorithm.",
 		opt_n_threads, opt_n_threads > 1 ? "s":"",
-		algo_names[opt_algo]);
+		opt_algo);
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);

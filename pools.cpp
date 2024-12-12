@@ -9,7 +9,6 @@
 
 #include "miner.h"
 #include "compat.h"
-#include "algos.h"
 
 // to move in miner.h
 extern bool allow_gbt;
@@ -80,7 +79,6 @@ void pool_set_creds(int pooln)
 		p->status |= POOL_ST_DEFINED;
 		// init pool options as "unset"
 		// until cmdline is fully parsed...
-		p->algo = -1;
 		p->max_diff = -1.;
 		p->max_rate = -1.;
 		p->scantime = -1;
@@ -109,7 +107,6 @@ void pool_init_defaults()
 	struct pool_infos *p;
 	for (int i=0; i<num_pools; i++) {
 		p = &pools[i];
-		if (p->algo == -1) p->algo = (int) opt_algo;
 		if (p->max_diff == -1.) p->max_diff = opt_max_diff;
 		if (p->max_rate == -1.) p->max_rate = opt_max_rate;
 		if (p->scantime == -1) p->scantime = opt_scantime;
@@ -124,10 +121,6 @@ void pool_set_attr(int pooln, const char* key, char* arg)
 	struct pool_infos *p = &pools[pooln];
 	if (!strcasecmp(key, "name")) {
 		snprintf(p->name, sizeof(p->name), "%s", arg);
-		return;
-	}
-	if (!strcasecmp(key, "algo")) {
-		p->algo = algo_to_int(arg);
 		return;
 	}
 	if (!strcasecmp(key, "scantime")) {
@@ -209,26 +202,6 @@ bool pool_switch(int thr_id, int pooln)
 
 	pthread_mutex_unlock(&stratum_work_lock);
 
-	// algo "blind" switch without free, not proper
-	// todo: barrier required to free algo resources
-	if (p->algo != (int) opt_algo) {
-
-		if (opt_algo != ALGO_AUTO) {
-
-			algo_switch = true;
-
-			pthread_mutex_lock(&stats_lock);
-			for (int n=0; n<opt_n_threads; n++)
-				thr_hashrates[n] = 0.;
-			stats_purge_all();
-			if (check_dups)
-				hashlog_purge_all();
-			pthread_mutex_unlock(&stats_lock);
-		}
-
-		opt_algo = (enum sha_algos) p->algo;
-	}
-
 	if (prevn != cur_pooln) {
 
 		pool_switch_count++;
@@ -254,8 +227,6 @@ bool pool_switch(int thr_id, int pooln)
 			// temporary... until stratum code cleanup
 			stratum = p->stratum;
 			stratum.pooln = cur_pooln;
-			stratum.rpc2 = (p->algo == ALGO_WILDKECCAK || p->algo == ALGO_CRYPTONIGHT);
-			stratum.rpc2 |= p->algo == ALGO_CRYPTOLIGHT;
 
 			// unlock the stratum thread
 			tq_push(thr_info[stratum_thr_id].q, strdup(rpc_url));
@@ -277,9 +248,6 @@ bool pool_switch(int thr_id, int pooln)
 		}
 
 	}
-
-	stratum.rpc2 = (p->algo == ALGO_WILDKECCAK || p->algo == ALGO_CRYPTONIGHT);
-	stratum.rpc2 |= p->algo == ALGO_CRYPTOLIGHT;
 
 	return true;
 }

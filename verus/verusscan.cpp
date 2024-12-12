@@ -157,7 +157,7 @@ extern "C" void inline Verus2hash(unsigned char *hash, unsigned char *curBuf, un
 
 extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done)
 {
-
+//printf("scanhash_verus\n");
 	uint32_t *pdata = work->data;
 	uint32_t *ptarget = work->target;
 	uint8_t blockhash_half[64] = { 0 };

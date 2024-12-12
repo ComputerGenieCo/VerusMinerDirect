@@ -14,7 +14,7 @@ rm -f Makefile.in
 rm -f config.status
 aclocal && autoheader && automake --add-missing --gnu --copy && autoconf || echo "Run conf done"
 
-extracflags="-march=native "
+extracflags=""
 
 ./configure CXXFLAGS="$extracflags"
 

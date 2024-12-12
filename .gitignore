@@ -14,7 +14,7 @@ depcomp
 missing
 install-sh
 stamp-h1
-ccminer-config.h*
+miner-config.h*
 config.log
 config.status
 config.status.lineno
@@ -65,3 +65,5 @@ compat/curl-for-windows/
 *.cudafe2.c
 
 configure~
+
+VerusMinerDirect
