@@ -15,8 +15,8 @@
 #include "uint256.h"
 #include "miner.h"
 
-#define VERUS_KEY_SIZE 8832
-#define VERUS_KEY_SIZE128 552
+constexpr int VERUS_KEY_SIZE = 8832;
+constexpr int VERUS_KEY_SIZE128 = 552;
 
 enum
 {
@@ -26,10 +26,10 @@ enum
 	SER_GETHASH = (1 << 2),
 };
 
-static const int PROTOCOL_VERSION = 170002;
+constexpr int PROTOCOL_VERSION = 170002;
 
-#define EQNONCE_OFFSET 30
-#define NONCE_OFT EQNONCE_OFFSET
+constexpr int EQNONCE_OFFSET = 30;
+constexpr int NONCE_OFT = EQNONCE_OFFSET;
 
 static bool init[MAX_GPUS] = { 0 };
 static __thread uint32_t throughput = 0;
@@ -38,8 +38,13 @@ static __thread uint32_t throughput = 0;
 #define htobe32(x) swab32(x)
 #endif
 
-extern "C" inline void GenNewCLKey(unsigned char *seedBytes32, u128 *keyback) {
+// cleanup
+void free_verushash(int thr_id) {
+	if (!init[thr_id]) { return; }
+	init[thr_id] = false;
+}
 
+extern "C" inline void GenNewCLKey(unsigned char *seedBytes32, u128 *keyback) {
 	// generate a new key by chain hashing with Haraka256 from the last curbuf
 	int n256blks = VERUS_KEY_SIZE >> 5;  //8832 >> 5
 	int nbytesExtra = VERUS_KEY_SIZE & 0x1f;  //8832 & 0x1f
@@ -60,7 +65,6 @@ extern "C" inline void GenNewCLKey(unsigned char *seedBytes32, u128 *keyback) {
 }
 
 extern "C" inline void FixKey(uint32_t *fixrand, uint32_t *fixrandex, u128 *keyback, u128 * g_prand, u128 *g_prandex) {
-
 	for (int i = 31; i > -1; i--) {
 		keyback[fixrandex[i]] = g_prandex[i];
 		keyback[fixrand[i]] = g_prand[i];
@@ -68,17 +72,10 @@ extern "C" inline void FixKey(uint32_t *fixrand, uint32_t *fixrandex, u128 *keyb
 
 }
 
- extern "C" inline void VerusHashHalf(void *result2, unsigned char *data, int len) {
-
+extern "C" inline void VerusHashHalf(void *result2, unsigned char *data, int len) {
 	alignas(32) unsigned char buf1[64] = { 0 }, buf2[64];
 	unsigned char *curBuf = buf1, *result = buf2;
 	int curPos = 0;
-	//unsigned char result[64];
-	curBuf = buf1;
-	result = buf2;
-	curPos = 0;
-	std::fill(buf1, buf1 + sizeof(buf1), 0);
-
 	unsigned char *tmp;
 	load_constants();
 
@@ -105,9 +102,8 @@ extern "C" inline void FixKey(uint32_t *fixrand, uint32_t *fixrandex, u128 *keyb
 	memcpy(result2, curBuf, 64);
 };
 
-extern "C" void inline Verus2hash(unsigned char *hash, unsigned char *curBuf, unsigned char *nonce,
+extern "C" inline void Verus2hash(unsigned char *hash, unsigned char *curBuf, unsigned char *nonce,
 	u128  * __restrict data_key, uint8_t *gpu_init, uint32_t *fixrand, uint32_t *fixrandex, u128 *g_prand, u128 *g_prandex, int version) {
-
 	//uint64_t mask = VERUS_KEY_SIZE128; //552
 	static const __m128i shuf1 = _mm_setr_epi8(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0);
 	const __m128i fill1 = _mm_shuffle_epi8(_mm_load_si128((u128 *)curBuf), shuf1);
@@ -130,15 +126,15 @@ extern "C" void inline Verus2hash(unsigned char *hash, unsigned char *curBuf, un
 }
 
 extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done) {
-
 	uint32_t *pdata = work->data;
 	uint32_t *ptarget = work->target;
 	uint8_t blockhash_half[64] = { 0 };
 	uint8_t gpuinit = 0;
 	struct timeval tv_start, tv_end;
-	u128 *data_key =  (u128*)malloc(VERUS_KEY_SIZE + 1024);
-	u128 *data_key_prand = data_key + VERUS_KEY_SIZE128 ;
-	u128 *data_key_prandex = data_key + VERUS_KEY_SIZE128 + 32;
+	using aligned_u128 = std::aligned_storage<sizeof(u128), alignof(u128)>::type;
+	std::vector<aligned_u128> data_key(VERUS_KEY_SIZE + 1024);
+	u128 *data_key_prand = reinterpret_cast<u128*>(data_key.data()) + VERUS_KEY_SIZE128;
+	u128 *data_key_prandex = reinterpret_cast<u128*>(data_key.data()) + VERUS_KEY_SIZE128 + 32;
 
 	uint32_t nonce_buf = 0;
 	uint32_t fixrand[32];
@@ -168,7 +164,7 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 	uint32_t  vhash[8] = { 0 };
 
 	VerusHashHalf(blockhash_half, (unsigned char*)full_data, 1487);
-	GenNewCLKey((unsigned char*)blockhash_half, data_key);  //data_key a global static 2D array data_key[16][8832];
+	GenNewCLKey((unsigned char*)blockhash_half, reinterpret_cast<u128*>(data_key.data()));  //data_key a global static 2D array data_key[16][8832];
 
 	gettimeofday(&tv_start, NULL);
 	throughput = 1;
@@ -177,7 +173,7 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 
 		*hashes_done = nonce_buf + throughput;
 		((uint32_t *)(&nonceSpace[11]))[0] = nonce_buf;
-		Verus2hash((unsigned char *)vhash, (unsigned char *)blockhash_half, nonceSpace, data_key, &gpuinit, fixrand, fixrandex , data_key_prand, data_key_prandex, version);
+		Verus2hash((unsigned char *)vhash, (unsigned char *)blockhash_half, nonceSpace, reinterpret_cast<u128*>(data_key.data()), &gpuinit, fixrand, fixrandex , data_key_prand, data_key_prandex, version);
 
 		if (vhash[7] <= Htarg ) {
 			work->valid_nonces++;
@@ -199,12 +195,6 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 out:
 	gettimeofday(&tv_end, NULL);
 	pdata[NONCE_OFT] = ((uint32_t*)full_data)[NONCE_OFT] + 1;
-	free(data_key);
+	free_verushash(thr_id);
 	return work->valid_nonces;
-}
-
-// cleanup
-void free_verushash(int thr_id) {
-	if (!init[thr_id]) { return; }
-	init[thr_id] = false;
 }

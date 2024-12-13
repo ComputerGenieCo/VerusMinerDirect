@@ -123,10 +123,8 @@ __m128i __verusclmulwithoutreduction64alignedrepeatv2_2(__m128i *randomsource, c
 // returning a 64 bit hash value
 
 uint64_t verusclhashv2_2(void * random, const unsigned char buf[64], uint64_t keyMask, uint32_t *fixrand, uint32_t *fixrandex, u128 *g_prand, u128 *g_prandex) {
-
 	__m128i  acc = __verusclmulwithoutreduction64alignedrepeatv2_2((__m128i *)random, (const __m128i *)buf, 511, fixrand, fixrandex, g_prand, g_prandex);
 	acc = _mm_xor_si128(acc, lazyLengthHash(1024, 64));
-
 	return precompReduction64(acc);
 }
 

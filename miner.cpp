@@ -112,7 +112,8 @@ int opt_timeout = 300; // curl
 int opt_scantime = 10;
 static json_t *opt_config;
 static const bool opt_time = true;
-extern char* opt_algo = "ALGO_EQUIHASH";
+extern const char* opt_algo;
+const char* opt_algo = "ALGO_EQUIHASH";
 int opt_n_threads = 0;
 int gpu_threads = 1;
 int64_t opt_affinity = -1L;
@@ -1116,7 +1117,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 	case WC_SUBMIT_WORK:
 		aligned_free(wc->u.work);
 		break;
-	default: /* do nothing */
+	default:		/* do nothing */
 		break;
 	}
 
