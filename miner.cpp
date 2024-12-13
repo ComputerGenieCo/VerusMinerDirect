@@ -41,6 +41,8 @@
 #endif
 
 #include "miner.h"
+#include "signal_handler.h"
+#include "config_parser.h" // Include the new header for configuration parsing
 
 #define EQNONCE_OFFSET 30
 
@@ -3129,53 +3131,6 @@ static void parse_single_opt(int opt, int argc, char *argv[])
     optind = prev; // reset argv index
 }
 
-#ifndef WIN32
-static void signal_handler(int sig)
-{
-    switch (sig)
-    {
-    case SIGHUP:
-        applog(LOG_INFO, "SIGHUP received");
-        break;
-    case SIGINT:
-        signal(sig, SIG_IGN);
-        applog(LOG_INFO, "SIGINT received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    case SIGTERM:
-        applog(LOG_INFO, "SIGTERM received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    }
-}
-#else
-BOOL WINAPI ConsoleHandler(DWORD dwType)
-{
-    switch (dwType)
-    {
-    case CTRL_C_EVENT:
-        applog(LOG_INFO, "CTRL_C_EVENT received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    case CTRL_BREAK_EVENT:
-        applog(LOG_INFO, "CTRL_BREAK_EVENT received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    case CTRL_LOGOFF_EVENT:
-        applog(LOG_INFO, "CTRL_LOGOFF_EVENT received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    case CTRL_SHUTDOWN_EVENT:
-        applog(LOG_INFO, "CTRL_SHUTDOWN_EVENT received, exiting");
-        proper_exit(EXIT_CODE_KILLED);
-        break;
-    default:
-        return false;
-    }
-    return true;
-}
-#endif
-
 void Clear()
 {
 #if defined _WIN32
@@ -3348,18 +3303,6 @@ void initialize_mining_threads(int num_threads)
            num_threads, num_threads > 1 ? "s" : "", opt_algo);
 }
 
-void setup_signal_handlers()
-{
-#ifndef WIN32
-    /* Always catch Ctrl+C */
-    signal(SIGINT, signal_handler);
-    signal(SIGHUP, signal_handler);
-    signal(SIGTERM, signal_handler);
-#else
-    SetConsoleCtrlHandler((PHANDLER_ROUTINE)ConsoleHandler, TRUE);
-#endif
-}
-
 int main(int argc, char *argv[])
 {
     struct thr_info *thr;
@@ -3482,8 +3425,7 @@ int main(int argc, char *argv[])
         i = chdir("/");
         if (i < 0)
             applog(LOG_ERR, "chdir() failed (errno = %d)", errno);
-        signal(SIGHUP, signal_handler);
-        signal(SIGTERM, signal_handler);
+        setup_signal_handlers(); // Replace signal_handler with setup_signal_handlers
 #else
         HWND hcon = GetConsoleWindow();
         if (hcon)
