@@ -163,8 +163,7 @@ void gpulog(int prio, int thr_id, const char *fmt, ...)
     int len;
     va_list ap;
 
-    if (prio == LOG_DEBUG && !opt_debug)
-        return;
+    if (prio == LOG_DEBUG && !opt_debug) { return; }
 
     snprintf(pfmt, sizeof(pfmt), "CPU T%d: Verus Hashing - ", thr_id);
 

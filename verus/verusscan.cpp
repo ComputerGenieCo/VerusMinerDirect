@@ -51,8 +51,7 @@ extern "C" inline void GenNewCLKey(unsigned char *seedBytes32, u128 *keyback) {
 	int nbytesExtra = VERUS_KEY_SIZE & 0x1f;  //8832 & 0x1f
 	unsigned char *pkey = (unsigned char*)keyback;
 	unsigned char *psrc = seedBytes32;
-	for (int i = 0; i < n256blks; i++)
-	{
+	for (int i = 0; i < n256blks; i++) {
 		haraka256(pkey, psrc);
 		psrc = pkey;
 		pkey += 32;

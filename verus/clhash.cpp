@@ -9,7 +9,7 @@ inline void store_si128(__m128i* ptr, __m128i value) {
 	_mm_store_si128(ptr, value);
 }
 
-void process_case_0(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_0(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i temp1 = load_si128(prandex);
 	const __m128i temp2 = load_si128(&pbuf[(selector & 1) ? -1 : 1]);
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
@@ -32,7 +32,7 @@ void process_case_0(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m12
 	store_si128(prandex, tempb2);
 }
 
-void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i temp1 = load_si128(prand);
 	const __m128i temp2 = load_si128(pbuf);
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
@@ -55,7 +55,7 @@ void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m12
 	store_si128(prand, _mm_xor_si128(tempb1, temp12));
 }
 
-void process_case_8(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_8(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i temp1 = load_si128(prandex);
 	const __m128i temp2 = load_si128(pbuf);
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
@@ -79,7 +79,7 @@ void process_case_8(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m12
 	store_si128(prandex, tempb2);
 }
 
-void process_case_0c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_0c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i temp1 = load_si128(prand);
 	const __m128i temp2 = load_si128(&pbuf[(selector & 1) ? -1 : 1]);
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
@@ -117,7 +117,7 @@ void process_case_0c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 	}
 }
 
-void process_case_10(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_10(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	// a few AES operations
 	const __m128i *rc = prand;
 	__m128i tmp;
@@ -143,7 +143,7 @@ void process_case_10(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 	store_si128(prandex, _mm_xor_si128(tempa1, tempa2));
 }
 
-void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	// we'll just call this one the monkins loop, inspired by Chris - modified to cast to uint64_t on shift for more variability in the loop
 	const __m128i *buftmp = &pbuf[(selector & 1) ? -1 : 1];
 	__m128i tmp; // used by MIX2
@@ -180,7 +180,7 @@ void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 	store_si128(prand, tempa4);
 }
 
-void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i *buftmp = &pbuf[(selector & 1) ? -1 : 1];
 	__m128i tmp; // used by MIX2
 
@@ -213,7 +213,7 @@ void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 	store_si128(prand, _mm_xor_si128(tempa3, acc));
 }
 
-void process_case_1c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
+inline void process_case_1c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i temp1 = load_si128(pbuf);
 	const __m128i temp2 = load_si128(prandex);
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
