@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdexcept>
+#include <array>
 #include <vector>
 
 #include "verus_clhash.h"
@@ -50,8 +51,7 @@ extern "C" inline void GenNewCLKey(unsigned char *seedBytes32, u128 *keyback) {
 	int nbytesExtra = VERUS_KEY_SIZE & 0x1f;  //8832 & 0x1f
 	unsigned char *pkey = (unsigned char*)keyback;
 	unsigned char *psrc = seedBytes32;
-	for (int i = 0; i < n256blks; i++)
-	{
+	for (int i = 0; i < n256blks; i++) {
 		haraka256(pkey, psrc);
 		psrc = pkey;
 		pkey += 32;
@@ -69,7 +69,6 @@ extern "C" inline void FixKey(uint32_t *fixrand, uint32_t *fixrandex, u128 *keyb
 		keyback[fixrandex[i]] = g_prandex[i];
 		keyback[fixrand[i]] = g_prand[i];
 	}
-
 }
 
 extern "C" inline void VerusHashHalf(void *result2, unsigned char *data, int len) {
@@ -132,13 +131,13 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 	uint8_t gpuinit = 0;
 	struct timeval tv_start, tv_end;
 	using aligned_u128 = std::aligned_storage<sizeof(u128), alignof(u128)>::type;
-	std::vector<aligned_u128> data_key(VERUS_KEY_SIZE + 1024);
+	std::array<aligned_u128, VERUS_KEY_SIZE + 1024> data_key;
 	u128 *data_key_prand = reinterpret_cast<u128*>(data_key.data()) + VERUS_KEY_SIZE128;
 	u128 *data_key_prandex = reinterpret_cast<u128*>(data_key.data()) + VERUS_KEY_SIZE128 + 32;
 
 	uint32_t nonce_buf = 0;
-	uint32_t fixrand[32];
-	uint32_t fixrandex[32];
+	std::array<uint32_t, 32> fixrand;
+	std::array<uint32_t, 32> fixrandex;
 
 	unsigned char block_41970[3] = { 0xfd, 0x40, 0x05};
 	uint8_t  full_data[140 + 3 + 1344] = { 0 };
@@ -157,7 +156,6 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
         memset(full_data + 4 + 32 + 32 + 32 + 4 + 4, 0, 32); // nNonce
         memset(sol_data + 3 + 8, 0, 64);                     // hashPrevMMRRoot, hashBlockMMRRoot
 		memcpy(nonceSpace, &pdata[EQNONCE_OFFSET - 3], 7 );			// transfer the nonce values that would be in the header to
-//		memcpy(nonceSpace + 4, &pdata[EQNONCE_OFFSET + 1], 3 );		// the 15 bytes available
 		memcpy(nonceSpace + 7, &pdata[EQNONCE_OFFSET + 2], 4 );	
 	}
 
@@ -169,11 +167,11 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 	gettimeofday(&tv_start, NULL);
 	throughput = 1;
 	const uint32_t Htarg = ptarget[7];
-	do {
 
+	while (nonce_buf < max_nonce && !work_restart[thr_id].restart) {
 		*hashes_done = nonce_buf + throughput;
 		((uint32_t *)(&nonceSpace[11]))[0] = nonce_buf;
-		Verus2hash((unsigned char *)vhash, (unsigned char *)blockhash_half, nonceSpace, reinterpret_cast<u128*>(data_key.data()), &gpuinit, fixrand, fixrandex , data_key_prand, data_key_prandex, version);
+		Verus2hash((unsigned char *)vhash, (unsigned char *)blockhash_half, nonceSpace, reinterpret_cast<u128*>(data_key.data()), &gpuinit, fixrand.data(), fixrandex.data(), data_key_prand, data_key_prandex, version);
 
 		if (vhash[7] <= Htarg ) {
 			work->valid_nonces++;
@@ -183,16 +181,12 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 			memcpy(work->extra + 1332, nonceSpace, 15);  //copy in the valid nonce 15 bytes to the solution part
 			bn_store_hash_target_ratio(vhash, work->target, work, nonce);
 			work->nonces[work->valid_nonces - 1] = ((uint32_t*)full_data)[NONCE_OFT];
-			//pdata[NONCE_OFT] = endiandata[NONCE_OFT] + 1;
-			goto out;
+			break;
 		}
 
-		if ((uint64_t)throughput + (uint64_t)nonce_buf >= (uint64_t)max_nonce) { break; }
 		nonce_buf += throughput;
+	}
 
-	} while (!work_restart[thr_id].restart);
-
-out:
 	gettimeofday(&tv_end, NULL);
 	pdata[NONCE_OFT] = ((uint32_t*)full_data)[NONCE_OFT] + 1;
 	free_verushash(thr_id);

@@ -29,14 +29,16 @@
 int __cpuverusoptimized = 0x80;
 
 // multiply the length and the some key, no modulo
-__m128i lazyLengthHash(uint64_t keylength, uint64_t length) {
+// Inline lazyLengthHash function
+inline __m128i lazyLengthHash(uint64_t keylength, uint64_t length) {
 	const __m128i lengthvector = _mm_set_epi64x(keylength, length);
 	const __m128i clprod1 = _mm_clmulepi64_si128(lengthvector, lengthvector, 0x10);
 	return clprod1;
 }
 
 // modulo reduction to 64-bit value. The high 64 bits contain garbage, see precompReduction64
-__m128i precompReduction64_si128(__m128i A) {
+// Inline precompReduction64_si128 function
+inline __m128i precompReduction64_si128(__m128i A) {
 
 	//const __m128i C = _mm_set_epi64x(1U,(1U<<4)+(1U<<3)+(1U<<1)+(1U<<0)); // C is the irreducible poly. (64,4,3,1,0)
 	const __m128i C = _mm_cvtsi64_si128((1U << 4) + (1U << 3) + (1U << 1) + (1U << 0));
@@ -48,7 +50,8 @@ __m128i precompReduction64_si128(__m128i A) {
 	return final;/// WARNING: HIGH 64 BITS CONTAIN GARBAGE
 }
 
-uint64_t precompReduction64(__m128i A) { return _mm_cvtsi128_si64(precompReduction64_si128(A)); }
+// Inline precompReduction64 function
+inline uint64_t precompReduction64(__m128i A) { return _mm_cvtsi128_si64(precompReduction64_si128(A)); }
 
 void process_case_0(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
 void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
@@ -59,61 +62,57 @@ void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
 void process_case_1c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
 
+// Unroll the loop in __verusclmulwithoutreduction64alignedrepeatv2_2
 __m128i __verusclmulwithoutreduction64alignedrepeatv2_2(__m128i *randomsource, const __m128i buf[4], uint64_t keyMask, uint32_t *fixrand, uint32_t *fixrandex,
 	u128 *g_prand, u128 *g_prandex) {
 
 	const __m128i pbuf_copy[4] = { _mm_xor_si128(buf[0], buf[2]), _mm_xor_si128(buf[1], buf[3]), buf[2], buf[3] };
 	const __m128i *pbuf;
 
-	// divide key mask by 16 from bytes to __m128i
-	//keyMask >>= 4;
-
-	// the random buffer must have at least 32 16 byte dwords after the keymask to work with this
-	// algorithm. we take the value from the last element inside the keyMask + 2, as that will never
-	// be used to xor into the accumulator before it is hashed with other values first
 	__m128i acc = _mm_load_si128(randomsource + (keyMask + 2));
 
-	for (int64_t i = 0; i < 32; i++) {
-		const uint64_t selector = _mm_cvtsi128_si64(acc);
+	for (int64_t i = 0; i < 32; i += 4) {
+		#pragma unroll
+		for (int j = 0; j < 4; ++j) {
+			const uint64_t selector = _mm_cvtsi128_si64(acc);
 
-		uint32_t prand_idx = (selector >> 5) & keyMask;
-		uint32_t prandex_idx = (selector >> 32) & keyMask;
-		// get two random locations in the key, which will be mutated and swapped
-		__m128i *prand = randomsource + prand_idx;
-		__m128i *prandex = randomsource + prandex_idx;
+			uint32_t prand_idx = (selector >> 5) & keyMask;
+			uint32_t prandex_idx = (selector >> 32) & keyMask;
+			__m128i *prand = randomsource + prand_idx;
+			__m128i *prandex = randomsource + prandex_idx;
 
-		// select random start and order of pbuf processing
-		pbuf = pbuf_copy + (selector & 3);
-		_mm_store_si128(&g_prand[i], prand[0]);
-		_mm_store_si128(&g_prandex[i], prandex[0]);
-		fixrand[i] = prand_idx;
-		fixrandex[i] = prandex_idx;
+			pbuf = pbuf_copy + (selector & 3);
+			_mm_store_si128(&g_prand[i + j], prand[0]);
+			_mm_store_si128(&g_prandex[i + j], prandex[0]);
+			fixrand[i + j] = prand_idx;
+			fixrandex[i + j] = prandex_idx;
 
-		switch (selector & 0x1c) {
-			case 0:
-				process_case_0(prand, prandex, pbuf, acc, selector);
-				break;
-			case 4:
-				process_case_4(prand, prandex, pbuf, acc, selector);
-				break;
-			case 8:
-				process_case_8(prand, prandex, pbuf, acc, selector);
-				break;
-			case 0xc:
-				process_case_0c(prand, prandex, pbuf, acc, selector);
-				break;
-			case 0x10:
-				process_case_10(prand, prandex, pbuf, acc, selector);
-				break;
-			case 0x14:
-				process_case_14(prand, prandex, pbuf, acc, selector);
-				break;
-			case 0x18:
-				process_case_18(prand, prandex, pbuf, acc, selector);
-				break;
-			case 0x1c:
-				process_case_1c(prand, prandex, pbuf, acc, selector);
-				break;
+			switch (selector & 0x1c) {
+				case 0:
+					process_case_0(prand, prandex, pbuf, acc, selector);
+					break;
+				case 4:
+					process_case_4(prand, prandex, pbuf, acc, selector);
+					break;
+				case 8:
+					process_case_8(prand, prandex, pbuf, acc, selector);
+					break;
+				case 0xc:
+					process_case_0c(prand, prandex, pbuf, acc, selector);
+					break;
+				case 0x10:
+					process_case_10(prand, prandex, pbuf, acc, selector);
+					break;
+				case 0x14:
+					process_case_14(prand, prandex, pbuf, acc, selector);
+					break;
+				case 0x18:
+					process_case_18(prand, prandex, pbuf, acc, selector);
+					break;
+				case 0x1c:
+					process_case_1c(prand, prandex, pbuf, acc, selector);
+					break;
+			}
 		}
 	}
 	return acc;
