@@ -42,7 +42,6 @@
 
 #include "miner.h"
 #include "signal_handler.h"
-#include "config_parser.h" // Include the new header for configuration parsing
 
 #define EQNONCE_OFFSET 30
 
