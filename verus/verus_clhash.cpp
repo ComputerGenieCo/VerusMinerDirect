@@ -62,8 +62,8 @@ void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m1
 void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
 void process_case_1c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector);
 
-// Unroll the loop in __verusclmulwithoutreduction64alignedrepeatv2_2
-__m128i __verusclmulwithoutreduction64alignedrepeatv2_2(__m128i *randomsource, const __m128i buf[4], uint64_t keyMask, uint32_t *fixrand, uint32_t *fixrandex,
+// Unroll the loop in verusCLHashWithoutReduction
+__m128i verusCLHashWithoutReduction(__m128i *randomsource, const __m128i buf[4], uint64_t keyMask, uint32_t *fixrand, uint32_t *fixrandex,
 	u128 *g_prand, u128 *g_prandex) {
 
 	const __m128i pbuf_copy[4] = { _mm_xor_si128(buf[0], buf[2]), _mm_xor_si128(buf[1], buf[3]), buf[2], buf[3] };
@@ -122,7 +122,7 @@ __m128i __verusclmulwithoutreduction64alignedrepeatv2_2(__m128i *randomsource, c
 // returning a 64 bit hash value
 
 uint64_t verusclhashv2_2(void * random, const unsigned char buf[64], uint64_t keyMask, uint32_t *fixrand, uint32_t *fixrandex, u128 *g_prand, u128 *g_prandex) {
-	__m128i  acc = __verusclmulwithoutreduction64alignedrepeatv2_2((__m128i *)random, (const __m128i *)buf, 511, fixrand, fixrandex, g_prand, g_prandex);
+	__m128i  acc = verusCLHashWithoutReduction((__m128i *)random, (const __m128i *)buf, 511, fixrand, fixrandex, g_prand, g_prandex);
 	acc = _mm_xor_si128(acc, lazyLengthHash(1024, 64));
 	return precompReduction64(acc);
 }

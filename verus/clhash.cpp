@@ -28,8 +28,7 @@ inline void process_case_0(__m128i *prand, __m128i *prandex, const __m128i *pbuf
 	acc = _mm_xor_si128(clprod12, acc);
 
 	const __m128i tempb1 = _mm_mulhrs_epi16(acc, temp12);
-	const __m128i tempb2 = _mm_xor_si128(tempb1, temp12);
-	store_si128(prandex, tempb2);
+	store_si128(prandex, _mm_xor_si128(tempb1, temp12));
 }
 
 inline void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
@@ -38,8 +37,7 @@ inline void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf
 	const __m128i add1 = _mm_xor_si128(temp1, temp2);
 	const __m128i clprod1 = _mm_clmulepi64_si128(add1, add1, 0x10);
 	acc = _mm_xor_si128(clprod1, acc);
-	const __m128i clprod2 = _mm_clmulepi64_si128(temp2, temp2, 0x10);
-	acc = _mm_xor_si128(clprod2, acc);
+	acc = _mm_xor_si128(_mm_clmulepi64_si128(temp2, temp2, 0x10), acc);
 
 	const __m128i tempa1 = _mm_mulhrs_epi16(acc, temp1);
 	const __m128i tempa2 = _mm_xor_si128(tempa1, temp1);
@@ -48,11 +46,9 @@ inline void process_case_4(__m128i *prand, __m128i *prandex, const __m128i *pbuf
 	store_si128(prandex, tempa2);
 
 	const __m128i temp22 = load_si128(&pbuf[(selector & 1) ? -1 : 1]);
-	const __m128i add12 = _mm_xor_si128(temp12, temp22);
-	acc = _mm_xor_si128(add12, acc);
+	acc = _mm_xor_si128(_mm_xor_si128(temp12, temp22), acc);
 
-	const __m128i tempb1 = _mm_mulhrs_epi16(acc, temp12);
-	store_si128(prand, _mm_xor_si128(tempb1, temp12));
+	store_si128(prand, _mm_xor_si128(_mm_mulhrs_epi16(acc, temp12), temp12));
 }
 
 inline void process_case_8(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
@@ -71,12 +67,10 @@ inline void process_case_8(__m128i *prand, __m128i *prandex, const __m128i *pbuf
 	const __m128i add12 = _mm_xor_si128(temp12, temp22);
 	const __m128i clprod12 = _mm_clmulepi64_si128(add12, add12, 0x10);
 	acc = _mm_xor_si128(clprod12, acc);
-	const __m128i clprod22 = _mm_clmulepi64_si128(temp22, temp22, 0x10);
-	acc = _mm_xor_si128(clprod22, acc);
+	acc = _mm_xor_si128(_mm_clmulepi64_si128(temp22, temp22, 0x10), acc);
 
 	const __m128i tempb1 = _mm_mulhrs_epi16(acc, temp12);
-	const __m128i tempb2 = _mm_xor_si128(tempb1, temp12);
-	store_si128(prandex, tempb2);
+	store_si128(prandex, _mm_xor_si128(tempb1, temp12));
 }
 
 inline void process_case_0c(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
@@ -104,12 +98,10 @@ inline void process_case_0c(__m128i *prand, __m128i *prandex, const __m128i *pbu
 		const __m128i add12 = _mm_xor_si128(temp12, temp22);
 		const __m128i clprod12 = _mm_clmulepi64_si128(add12, add12, 0x10);
 		acc = _mm_xor_si128(clprod12, acc);
-		const __m128i clprod22 = _mm_clmulepi64_si128(temp22, temp22, 0x10);
-		acc = _mm_xor_si128(clprod22, acc);
+		acc = _mm_xor_si128(_mm_clmulepi64_si128(temp22, temp22, 0x10), acc);
 
 		const __m128i tempb1 = _mm_mulhrs_epi16(acc, temp12);
-		const __m128i tempb2 = _mm_xor_si128(tempb1, temp12);
-		store_si128(prand, tempb2);
+		store_si128(prand, _mm_xor_si128(tempb1, temp12));
 	} else {
 		store_si128(prand, load_si128(prandex));
 		store_si128(prandex, tempa2);
@@ -125,14 +117,10 @@ inline void process_case_10(__m128i *prand, __m128i *prandex, const __m128i *pbu
 	__m128i temp1 = load_si128(&pbuf[(selector & 1) ? -1 : 1]);
 	__m128i temp2 = load_si128(pbuf);
 
-	AES2(temp1, temp2, 0);
-	MIX2(temp1, temp2);
-
-	AES2(temp1, temp2, 4);
-	MIX2(temp1, temp2);
-
-	AES2(temp1, temp2, 8);
-	MIX2(temp1, temp2);
+	for (int i = 0; i < 3; ++i) {
+		AES2(temp1, temp2, i * 4);
+		MIX2(temp1, temp2);
+	}
 
 	acc = _mm_xor_si128(temp2, _mm_xor_si128(temp1, acc));
 
@@ -146,15 +134,13 @@ inline void process_case_10(__m128i *prand, __m128i *prandex, const __m128i *pbu
 inline void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	// we'll just call this one the monkins loop, inspired by Chris - modified to cast to uint64_t on shift for more variability in the loop
 	const __m128i *buftmp = &pbuf[(selector & 1) ? -1 : 1];
-	__m128i tmp; // used by MIX2
-
 	uint64_t rounds = selector >> 61; // loop randomly between 1 and 8 times
 	__m128i *rc = prand;
 	uint64_t aesroundoffset = 0;
 	__m128i onekey;
+	__m128i tmp; // used by MIX2
 
-	do
-	{
+	do {
 		if (selector & (((uint64_t)0x10000000) << rounds)) {
 			const __m128i temp2 = load_si128(rounds & 1 ? pbuf : buftmp);
 			const __m128i add1 = _mm_xor_si128(rc[0], temp2); rc++;
@@ -182,14 +168,12 @@ inline void process_case_14(__m128i *prand, __m128i *prandex, const __m128i *pbu
 
 inline void process_case_18(__m128i *prand, __m128i *prandex, const __m128i *pbuf, __m128i &acc, uint64_t selector) {
 	const __m128i *buftmp = &pbuf[(selector & 1) ? -1 : 1];
-	__m128i tmp; // used by MIX2
-
 	uint64_t rounds = selector >> 61; // loop randomly between 1 and 8 times
 	__m128i *rc = prand;
 	__m128i onekey;
+	__m128i tmp; // used by MIX2
 
-	do
-	{
+	do {
 		if (selector & (((uint64_t)0x10000000) << rounds)) {
 			const __m128i temp2 = load_si128(rounds & 1 ? pbuf : buftmp);
 			onekey = _mm_xor_si128(rc[0], temp2); rc++;
@@ -230,5 +214,5 @@ inline void process_case_1c(__m128i *prand, __m128i *prandex, const __m128i *pbu
 	const __m128i temp4 = load_si128(&pbuf[(selector & 1) ? -1 : 1]);
 	acc = _mm_xor_si128(temp4, acc);
 	const __m128i tempb1 = _mm_mulhrs_epi16(acc, tempa3);
-	*prandex = _mm_xor_si128(tempb1, tempa3);
+	store_si128(prandex, _mm_xor_si128(tempb1, tempa3));
 }

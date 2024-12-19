@@ -281,7 +281,7 @@ void sha256d(unsigned char *hash, const unsigned char *data, int len);
 struct work;
 
 
-extern int scanhash_verus(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done);
+extern int scan_for_valid_hashes(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done);
 
 
 /* free device allocated memory per algo */
