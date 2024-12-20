@@ -57,7 +57,6 @@ BOOL WINAPI ConsoleHandler(DWORD);
 #define HEAVYCOIN_BLKHDR_SZ 84
 #define MNR_BLKHDR_SZ 80
 
-// #include "nvml.h"
 #ifdef USE_WRAPNVML
 nvml_handle *hnvml = NULL;
 #endif
@@ -134,13 +133,6 @@ char *device_name[MAX_GPUS];
 short device_map[MAX_GPUS] = {0};
 long device_sm[MAX_GPUS] = {0};
 short device_mpcount[MAX_GPUS] = {0};
-// uint32_t gpus_intensity[MAX_GPUS] = { 0 };
-// uint32_t device_gpu_clocks[MAX_GPUS] = { 0 };
-// uint32_t device_mem_clocks[MAX_GPUS] = { 0 };
-// int32_t device_mem_offsets[MAX_GPUS] = { 0 };
-// uint32_t device_plimit[MAX_GPUS] = { 0 };
-// int8_t device_pstate[MAX_GPUS] = { -1, -1 };
-// int32_t device_led[MAX_GPUS] = { -1, -1 };
 int opt_led_mode = 0;
 int opt_cudaschedule = -1;
 static bool opt_keep_clocks = false;
@@ -158,7 +150,6 @@ int device_lookup_gap[MAX_GPUS] = {0};
 int device_interactive[MAX_GPUS] = {0};
 int opt_nfactor = 0;
 bool opt_autotune = true;
-char *jane_params = NULL;
 
 // pools (failover/getwork infos)
 struct pool_infos pools[MAX_POOLS] = {0};
@@ -239,75 +230,7 @@ static char const usage[] = "\
 Usage: " PROGRAM_NAME " [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the hash algorithm to use\n\
-			allium      Garlic double lyra2\n\
-			bastion     Hefty bastion\n\
-			bitcore     Timetravel-10\n\
-			blake       Blake 256 (SFR)\n\
-			blake2s     Blake2-S 256 (NEVA)\n\
-			blakecoin   Fast Blake 256 (8 rounds)\n\
-			bmw         BMW 256\n\
-			cryptolight AEON cryptonight (MEM/2)\n\
-			cryptonight XMR cryptonight v1 (old)\n\
-			c11/flax    X11 variant\n\
-			decred      Decred Blake256\n\
-			deep        Deepcoin\n\
 			verus       Veruscoin\n\
-			dmd-gr      Diamond-Groestl\n\
-			fresh       Freshcoin (shavite 80)\n\
-			fugue256    Fuguecoin\n\
-			graft       Cryptonight v8\n\
-			groestl     Groestlcoin\n"
-#ifdef WITH_HEAVY_ALGO
-                            "			heavy       Heavycoin\n"
-#endif
-                            "			hmq1725     Doubloons / Espers\n\
-			jackpot     JHA v8\n\
-			keccak      Deprecated Keccak-256\n\
-			keccakc     Keccak-256 (CreativeCoin)\n\
-			lbry        LBRY Credits (Sha/Ripemd)\n\
-			luffa       Joincoin\n\
-			lyra2       CryptoCoin\n\
-			lyra2v2     VertCoin\n\
-			lyra2z      ZeroCoin (3rd impl)\n\
-			myr-gr      Myriad-Groestl\n\
-			monero      XMR cryptonight (v7)\n\
-			neoscrypt   FeatherCoin, Phoenix, UFO...\n\
-			nist5       NIST5 (TalkCoin)\n\
-			penta       Pentablake hash (5x Blake 512)\n\
-			phi1612     LUX initial algo, for Seraph\n\
-			phi2        LUX v2 with lyra2\n\
-			polytimos   Politimos\n\
-			quark       Quark\n\
-			qubit       Qubit\n\
-			sha256d     SHA256d (bitcoin)\n\
-			sha256t     SHA256 x3\n\
-			sia         SIA (Blake2B)\n\
-			sib         Sibcoin (X11+Streebog)\n\
-			scrypt      Scrypt\n\
-			scrypt-jane Scrypt-jane Chacha\n\
-			skein       Skein SHA2 (Skeincoin)\n\
-			skein2      Double Skein (Woodcoin)\n\
-			skunk       Skein Cube Fugue Streebog\n\
-			sonoa       97 hashes based on X17 ones (Sono)\n\
-			stellite    Cryptonight v3\n\
-			s3          S3 (1Coin)\n\
-			timetravel  Machinecoin permuted x8\n\
-			tribus      Denarius\n\
-			vanilla     Blake256-8 (VNL)\n\
-			veltor      Thorsriddle streebog\n\
-			whirlcoin   Old Whirlcoin (Whirlpool algo)\n\
-			whirlpool   Whirlpool algo\n\
-			x11evo      Permuted x11 (Revolver)\n\
-			x11         X11 (DarkCoin)\n\
-			x12         X12 (GalaxyCash)\n\
-			x13         X13 (MaruCoin)\n\
-			x14         X14\n\
-			x15         X15\n\
-			x16r        X16R (Raven)\n\
-			x16s        X16S\n\
-			x17         X17\n\
-			wildkeccak  Boolberry\n\
-			zr5         ZR5 (ZiftrCoin)\n\
   -d, --devices         Comma separated list of CUDA devices to use.\n\
                         Device IDs start counting from 0! Alternatively takes\n\
                         string names of your cards like gtx780ti or gt640#2\n\
@@ -387,7 +310,7 @@ static char const short_options[] =
 #ifdef HAVE_SYSLOG_H
     "S"
 #endif
-    "a:Bc:k:i:Dhp:Px:f:m:nqr:R:s:t:T:o:u:O:Vd:N:b:l:L:";
+    "a:Bc:i:Dhp:Px:f:m:nqr:R:s:t:T:o:u:O:Vd:N:b:l:L:";
 
 struct option options[] = {
     {"algo", 1, NULL, 'a'},
@@ -417,13 +340,6 @@ struct option options[] = {
     {"no-gbt", 0, NULL, 1011},
     {"no-longpoll", 0, NULL, 1003},
     {"no-stratum", 0, NULL, 1007},
-    {"no-autotune", 0, NULL, 1004},   // scrypt
-    {"interactive", 1, NULL, 1050},   // scrypt
-    {"lookup-gap", 1, NULL, 'L'},     // scrypt
-    {"texture-cache", 1, NULL, 1051}, // scrypt
-    {"launch-config", 1, NULL, 'l'},  // scrypt bbr xmr
-    {"scratchpad", 1, NULL, 'k'},     // bbr
-    {"bfactor", 1, NULL, 1055},       // xmr
     {"max-temp", 1, NULL, 1060},
     {"max-diff", 1, NULL, 1061},
     {"max-rate", 1, NULL, 1062},
@@ -475,38 +391,6 @@ struct option options[] = {
     {"diff-multiplier", 1, NULL, 'm'},
     {"diff-factor", 1, NULL, 'f'}, // compat
     {0, 0, 0, 0}};
-
-static char const scrypt_usage[] = "\n\
-Scrypt specific options:\n\
-  -l, --launch-config   gives the launch configuration for each kernel\n\
-                        in a comma separated list, one per device.\n\
-  -L, --lookup-gap      Divides the per-hash memory requirement by this factor\n\
-                        by storing only every N'th value in the scratchpad.\n\
-                        Default is 1.\n\
-      --interactive     comma separated list of flags (0/1) specifying\n\
-                        which of the CUDA device you need to run at inter-\n\
-                        active frame rates (because it drives a display).\n\
-      --texture-cache   comma separated list of flags (0/1/2) specifying\n\
-                        which of the CUDA devices shall use the texture\n\
-                        cache for mining. Kepler devices may profit.\n\
-      --no-autotune     disable auto-tuning of kernel launch parameters\n\
-";
-
-static char const xmr_usage[] = "\n\
-CryptoNight specific options:\n\
-  -l, --launch-config   gives the launch configuration for each kernel\n\
-                        in a comma separated list, one per device.\n\
-      --bfactor=[0-12]  Run Cryptonight core kernel in smaller pieces,\n\
-                        From 0 (ui freeze) to 12 (smooth), win default is 11\n\
-                        This is a per-device setting like the launch config.\n\
-";
-
-static char const bbr_usage[] = "\n\
-Boolberry specific options:\n\
-  -l, --launch-config   gives the launch configuration for each kernel\n\
-                        in a comma separated list, one per device.\n\
-  -k, --scratchpad url  Url used to download the scratchpad cache.\n\
-";
 
 struct work _ALIGN(64) g_work;
 volatile time_t g_work_time;
@@ -868,8 +752,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
     {
         uint32_t sent = 0;
         uint32_t ntime, nonce = work->nonces[idnonce];
-        char *ntimestr, *noncestr, *xnonce2str, *nvotestr;
-        uint16_t nvote = 0;
+        char *ntimestr, *noncestr, *xnonce2str;
 
         le32enc(&ntime, work->data[17]);
         le32enc(&nonce, work->data[19]);
@@ -906,20 +789,10 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
             applog(LOG_DEBUG, "share diff: %.5f (x %.1f)",
                    stratum.sharediff, work->shareratio[idnonce]);
 
-        if (opt_vote)
-        { // ALGO_HEAVY
-            nvotestr = bin2hex((const uchar *)(&nvote), 2);
-            sprintf(s, "{\"method\": \"mining.submit\", \"params\": ["
-                       "\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\":%u}",
-                    pool->user, work->job_id + 8, xnonce2str, ntimestr, noncestr, nvotestr, stratum.job.shares_count + 10);
-            free(nvotestr);
-        }
-        else
-        {
-            sprintf(s, "{\"method\": \"mining.submit\", \"params\": ["
-                       "\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\":%u}",
-                    pool->user, work->job_id + 8, xnonce2str, ntimestr, noncestr, stratum.job.shares_count + 10);
-        }
+        sprintf(s, "{\"method\": \"mining.submit\", \"params\": ["
+                   "\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\":%u}",
+                pool->user, work->job_id + 8, xnonce2str, ntimestr, noncestr, stratum.job.shares_count + 10);
+
         free(xnonce2str);
         free(ntimestr);
         free(noncestr);
@@ -937,7 +810,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
     }
     else
     {
-
         int data_size = 128;
         int adata_sz = data_size / sizeof(uint32_t);
 
@@ -985,7 +857,6 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
     return true;
 }
 
-/* simplified method to only get some extra infos in solo mode */
 static bool gbt_work_decode(const json_t *val, struct work *work)
 {
     json_t *err = json_object_get(val, "error");
@@ -1222,12 +1093,10 @@ static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 
     /* assign pool number before rpc calls */
     ret_work->pooln = wc->pooln;
-    // applog(LOG_DEBUG, "%s: pool %d", __func__, wc->pooln);
 
     /* obtain new work from bitcoin via JSON-RPC */
     while (!get_upstream_work(curl, ret_work))
     {
-
         if (unlikely(ret_work->pooln != cur_pooln))
         {
             applog(LOG_ERR, "get_work json_rpc_call failed");
@@ -1425,47 +1294,38 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 
     if (!sctx->job.job_id)
     {
-        // applog(LOG_WARNING, "stratum_gen_work: job not yet retrieved");
         return false;
     }
 
     pthread_mutex_lock(&stratum_work_lock);
 
-    // store the job ntime as high part of jobid
     snprintf(work->job_id, sizeof(work->job_id), "%07x %s",
              be32dec(sctx->job.ntime) & 0xfffffff, sctx->job.job_id);
     work->xnonce2_len = sctx->xnonce2_size;
     memcpy(work->xnonce2, sctx->job.xnonce2, sctx->xnonce2_size);
 
-    // also store the block number
     work->height = sctx->job.height;
-    // and the pool of the current stratum
     work->pooln = sctx->pooln;
-
-    /* Generate merkle root */
 
     for (i = 0; i < sctx->job.merkle_count; i++)
     {
         memcpy(merkle_root + 32, sctx->job.merkle[i], 32);
     }
 
-    /* Increment extranonce2 */
     for (i = 0; i < (int)sctx->xnonce2_size && !++sctx->job.xnonce2[i]; i++)
         ;
 
-    /* Assemble block header */
     memset(work->data, 0, sizeof(work->data));
     work->data[0] = le32dec(sctx->job.version);
     for (i = 0; i < 8; i++)
         work->data[1 + i] = le32dec((uint32_t *)sctx->job.prevhash + i);
 
-    memcpy(&work->data[9], sctx->job.coinbase, 32 + 32); // merkle [9..16] + reserved
+    memcpy(&work->data[9], sctx->job.coinbase, 32 + 32);
     work->data[25] = le32dec(sctx->job.ntime);
     work->data[26] = le32dec(sctx->job.nbits);
     memcpy(&work->solution, sctx->job.solution, 1344);
-    memcpy(&work->data[27], sctx->xnonce1, sctx->xnonce1_size & 0x1F); // pool extranonce
+    memcpy(&work->data[27], sctx->xnonce1, sctx->xnonce1_size & 0x1F);
     work->data[35] = 0x80;
-    // applog_hex(work->data, 140);
 
     if (opt_showdiff || opt_max_diff > 0.)
         calc_network_diff(work);
@@ -1476,12 +1336,11 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
         opt_difficulty = 1.;
 
     memcpy(work->target, sctx->job.extra, 32);
-    equi_work_set_target(work, sctx->job.diff / opt_difficulty);
+    work->targetdiff = (sctx->job.diff / opt_difficulty);
 
     if (stratum_diff != sctx->job.diff)
     {
         char sdiff[32] = {0};
-        // store for api stats
         stratum_diff = sctx->job.diff;
         if (opt_showdiff && work->targetdiff != stratum_diff)
             snprintf(sdiff, 32, " (%.5f)", work->targetdiff);
@@ -2571,9 +2430,6 @@ void parse_arg(int key, char *arg)
         }
         break;
     }
-    case 'k':
-        // jim
-        break;
 
     case 'D':
         opt_debug = true;
@@ -2740,77 +2596,6 @@ void parse_arg(int key, char *arg)
     case 1002:
         use_colors = false;
         break;
-    case 1004:
-        opt_autotune = false;
-        break;
-    case 'l': /* --launch-config */
-    {
-        char *last = NULL, *pch = strtok(arg, ",");
-        int n = 0;
-        while (pch != NULL)
-        {
-            device_config[n++] = last = strdup(pch);
-            pch = strtok(NULL, ",");
-        }
-        while (n < MAX_GPUS)
-            device_config[n++] = last;
-    }
-    break;
-    case 'L': /* scrypt --lookup-gap */
-    {
-        char *pch = strtok(arg, ",");
-        int n = 0, last = atoi(arg);
-        while (pch != NULL)
-        {
-            device_lookup_gap[n++] = last = atoi(pch);
-            pch = strtok(NULL, ",");
-        }
-        while (n < MAX_GPUS)
-            device_lookup_gap[n++] = last;
-    }
-    break;
-    case 1050: /* scrypt --interactive */
-    {
-        char *pch = strtok(arg, ",");
-        int n = 0, last = atoi(arg);
-        while (pch != NULL)
-        {
-            device_interactive[n++] = last = atoi(pch);
-            pch = strtok(NULL, ",");
-        }
-        while (n < MAX_GPUS)
-            device_interactive[n++] = last;
-    }
-    break;
-    case 1051: /* scrypt --texture-cache */
-    {
-        char *pch = strtok(arg, ",");
-        int n = 0, last = atoi(arg);
-        while (pch != NULL)
-        {
-            device_texturecache[n++] = last = atoi(pch);
-            pch = strtok(NULL, ",");
-        }
-        while (n < MAX_GPUS)
-            device_texturecache[n++] = last;
-    }
-    break;
-    case 1055: /* cryptonight --bfactor */
-    {
-        char *pch = strtok(arg, ",");
-        int n = 0, last = atoi(arg);
-        while (pch != NULL)
-        {
-            last = atoi(pch);
-            if (last > 15)
-                last = 15;
-            device_bfactor[n++] = last;
-            pch = strtok(NULL, ",");
-        }
-        while (n < MAX_GPUS)
-            device_bfactor[n++] = last;
-    }
-    break;
 
     case 1074: /* --keep-clocks */
         opt_keep_clocks = true;
@@ -3324,7 +3109,7 @@ int main(int argc, char *argv[])
     rpc_user = strdup("");
     rpc_pass = strdup("");
     rpc_url = strdup("");
-    jane_params = strdup("");
+
 
     initialize_mutexes();
 
@@ -3360,8 +3145,6 @@ int main(int argc, char *argv[])
         device_interactive[i] = -1;
         device_texturecache[i] = -1;
         device_singlememory[i] = -1;
-        // device_pstate[i] = -1;
-        // device_led[i] = -1;
     }
 
     /* parse command line */

@@ -18,75 +18,39 @@
 extern struct stratum_ctx stratum;
 extern pthread_mutex_t stratum_work_lock;
 
-// ZEC uses a different scale to compute diff... 
-// sample targets to diff (stored in the reverse byte order in work->target)
-// 0007fff800000000000000000000000000000000000000000000000000000000 is stratum diff 32
-// 003fffc000000000000000000000000000000000000000000000000000000000 is stratum diff 4
-// 00ffff0000000000000000000000000000000000000000000000000000000000 is stratum diff 1
-inline double target_to_diff_equi(uint32_t* target)
-{
-	uchar* tgt = (uchar*) target;
-	uint64_t m =
-		(uint64_t)tgt[30] << 24 |
-		(uint64_t)tgt[29] << 16 |
-		(uint64_t)tgt[28] << 8  |
-		(uint64_t)tgt[27] << 0;
-
-	return m ? (double)0xffff0000UL/m : 0.;
-}
-
+/**
+ * Converts a target value to difficulty for Verus.
+ * @param target The target value.
+ * @return The corresponding difficulty.
+ */
 inline double target_to_diff_verus(uint32_t target){
+    // Calculate the exponent part of the difficulty
     const unsigned exponent_diff = 8 * (0x20 - ((target >> 24) & 0xFF));
+    // Extract the significand part of the target
     const double significand = target & 0xFFFFFF;
+    // Compute and return the difficulty
     return std::ldexp(0x0f0f0f / significand, exponent_diff);
 }
 
-void diff_to_target_equi(uint32_t *target, double diff)
-{
-	uint64_t m;
-	int k;
-
-	for (k = 6; k > 0 && diff > 1.0; k--)
-		diff /= 4294967296.0;
-	m = (uint64_t)(4294901760.0 / diff);
-	if (m == 0 && k == 6)
-		std::fill(target, target + 32, 0xff);
-	else {
-		std::fill(target, target + 32, 0);
-		target[k + 1] = (uint32_t)(m >> 8);
-		target[k + 2] = (uint32_t)(m >> 40);
-		for (k = 0; k < 28 && ((uint8_t*)target)[k] == 0; k++)
-			((uint8_t*)target)[k] = 0xff;
-	}
-}
-
-/* compute nbits to get the network diff */
-double equi_network_diff(struct work *work)
-{
-	uint32_t nbits = work->data[26];
-	
-	uint32_t bits = (nbits & 0xffffff);
-	int16_t shift = (swab32(nbits) & 0xff);
-	shift = (31 - shift) * 8;
-	uint64_t tgt64 = swab32(bits);
-	tgt64 <<= shift;
-	std::array<uint8_t, 32> net_target = { 0 };
-	std::copy(reinterpret_cast<uint8_t*>(&tgt64), reinterpret_cast<uint8_t*>(&tgt64) + 8, net_target.begin() + 24);
-
-	return target_to_diff_equi(reinterpret_cast<uint32_t*>(net_target.data()));
-}
-
+/**
+ * Computes the network difficulty from the work's nbits.
+ * @param work The work structure containing the nbits.
+ * @return The network difficulty.
+ */
 double verus_network_diff(struct work *work)
 {
+    // Extract nbits from the work data
     uint32_t nbits = work->data[26];
+    // Convert nbits to difficulty and return
     return target_to_diff_verus(nbits);
 }
 
-void equi_work_set_target(struct work* work, double diff)
-{
-	work->targetdiff = diff;
-}
-
+/**
+ * Sets the target for the stratum context from the given parameters.
+ * @param sctx The stratum context.
+ * @param params The JSON parameters containing the target.
+ * @return True if the target was set successfully, false otherwise.
+ */
 bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params)
 {
 	std::array<uint8_t, 32> target_bin, target_be = { 0 };
@@ -94,6 +58,7 @@ bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params)
 	if (!target_hex || strlen(target_hex) == 0)
 		return false;
 
+	// Convert the target from hex to binary
 	hex2bin(target_bin.data(), target_hex, 32);
 
 	uint8_t *bits_start = nullptr;
@@ -110,6 +75,7 @@ bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params)
 		}
 	}
 
+	// Calculate the exponent and target bits
 	int padding = &target_bin[31] - bits_start;
 	uint32_t target_bits;
 	uint8_t exponent = ((padding * 8 + 1) + 7) / 8;
@@ -117,15 +83,25 @@ bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params)
 	std::copy(target_be.begin() + exponent - 3, target_be.begin() + exponent, reinterpret_cast<uint8_t*>(&target_bits));
 	target_bits |= (exponent << 24);
 
+	// Copy the target to the stratum context
 	std::copy(target_be.begin(), target_be.end(), sctx->job.extra);
 
+	// Lock the stratum work mutex
 	pthread_mutex_lock(&stratum_work_lock);
+	// Set the next difficulty in the stratum context
 	sctx->next_diff = target_to_diff_verus(target_bits);
+	// Unlock the stratum work mutex
 	pthread_mutex_unlock(&stratum_work_lock);
 
 	return true;
 }
 
+/**
+ * Handles the stratum notify message, updating the job information.
+ * @param sctx The stratum context.
+ * @param params The JSON parameters containing the job details.
+ * @return True if the job was updated successfully, false otherwise.
+ */
 bool equi_stratum_notify(struct stratum_ctx *sctx, json_t *params)
 {
 	const char *job_id, *version, *prevhash, *coinb1, *coinb2, *nbits, *stime, *solution = NULL;
@@ -142,6 +118,7 @@ bool equi_stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	clean = json_is_true(json_array_get(params, p)); p++;
 	solution = json_string_value(json_array_get(params, p++));
 
+	// Validate the parameters
 	if (!job_id || !prevhash || !coinb1 || !coinb2 || !version || !nbits || !stime ||
 	    strlen(prevhash) != 64 || strlen(version) != 8 ||
 	    strlen(coinb1) != 64 || strlen(coinb2) != 64 ||
@@ -158,6 +135,7 @@ bool equi_stratum_notify(struct stratum_ctx *sctx, json_t *params)
 			applog(LOG_DEBUG, "stratum time is at least %ds in the future", ntime);
 	}
 
+	// Update the stratum context with the new job information
 	pthread_mutex_lock(&stratum_work_lock);
 	hex2bin(sctx->job.version, version, 4);
 	hex2bin(sctx->job.prevhash, prevhash, 32);
@@ -198,6 +176,13 @@ out:
 }
 
 // equihash stratum protocol is not standard, use client.show_message to pass block height
+/**
+ * Handles the stratum show message, updating the block height.
+ * @param sctx The stratum context.
+ * @param id The JSON id of the message.
+ * @param params The JSON parameters containing the message details.
+ * @return True if the message was handled successfully, false otherwise.
+ */
 bool equi_stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *params)
 {
 	char *s;
@@ -230,8 +215,15 @@ bool equi_stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *par
 	return ret;
 }
 
+/**
+ * Stores the work solution in the work structure.
+ * @param work The work structure.
+ * @param hash The hash of the solution.
+ * @param sol_data The solution data.
+ */
 void equi_store_work_solution(struct work* work, uint32_t* hash, void* sol_data)
 {
+	// Store the solution data in the work structure
 	int nonce = work->valid_nonces-1;
 	memcpy(work->extra, sol_data, 1347);
 	bn_store_hash_target_ratio(hash, work->target, work, nonce);
@@ -239,6 +231,12 @@ void equi_store_work_solution(struct work* work, uint32_t* hash, void* sol_data)
 
 #define JSON_SUBMIT_BUF_LEN (20*1024)
 // called by submit_upstream_work()
+/**
+ * Submits the work solution to the pool.
+ * @param pool The pool information.
+ * @param work The work structure containing the solution.
+ * @return True if the submission was successful, false otherwise.
+ */
 bool equi_stratum_submit(struct pool_infos *pool, struct work *work)
 {
 	std::array<char, JSON_SUBMIT_BUF_LEN> s;
@@ -246,6 +244,7 @@ bool equi_stratum_submit(struct pool_infos *pool, struct work *work)
 	std::string jobid, noncestr, solhex;
 	int idnonce = work->submit_nonce_id;
 
+	// Set the nonce in the work data
 	work->data[EQNONCE_OFFSET] = work->nonces[idnonce];
 	unsigned char * nonce = (unsigned char*) (&work->data[27]);
 	size_t nonce_len = 32 - stratum.xnonce1_size;
@@ -265,6 +264,7 @@ bool equi_stratum_submit(struct pool_infos *pool, struct work *work)
 	jobid = work->job_id + 8;
 	sprintf(timehex.data(), "%08x", swab32(work->data[25]));
 
+	// Prepare the JSON submission string
 	snprintf(s.data(), s.size(), "{\"method\":\"mining.submit\",\"params\":"
 		"[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"], \"id\":%u}",
 		pool->user, jobid.c_str(), timehex.data(), noncestr.c_str(), solhex.c_str(),
@@ -277,6 +277,7 @@ bool equi_stratum_submit(struct pool_infos *pool, struct work *work)
 		return false;
 	}
 
+	// Update the share difficulty and increment the share count
 	stratum.sharediff = work->sharediff[idnonce];
 	stratum.job.shares_count++;
 
