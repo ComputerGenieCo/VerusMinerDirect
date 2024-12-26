@@ -9,8 +9,10 @@
  * any later version.  See COPYING for more details.
  */
 
+//------------------------------------------------------------------------------
+// Standard Includes 
+//------------------------------------------------------------------------------
 #include <miner-config.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +23,6 @@
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
-
 #include <curl/curl.h>
 #include <openssl/sha.h>
 
@@ -43,8 +44,6 @@
 #include "miner.h"
 #include "signal_handler.h"
 
-#define EQNONCE_OFFSET 30
-
 #ifdef WIN32
 #include <Mmsystem.h>
 #pragma comment(lib, "winmm.lib")
@@ -52,33 +51,64 @@
 BOOL WINAPI ConsoleHandler(DWORD);
 #endif
 
-#define PROGRAM_NAME "ccminer"
-#define LP_SCANTIME 60
-#define HEAVYCOIN_BLKHDR_SZ 84
-#define MNR_BLKHDR_SZ 80
-
-#ifdef USE_WRAPNVML
-nvml_handle *hnvml = NULL;
-#endif
-
-enum workio_commands
-{
+// Define workio command types
+enum workio_commands {
     WC_GET_WORK,
     WC_SUBMIT_WORK,
-    WC_ABORT,
+    WC_ABORT
 };
 
-struct workio_cmd
-{
+// Define workio command structure
+struct workio_cmd {
     enum workio_commands cmd;
     struct thr_info *thr;
-    union
-    {
+    union {
         struct work *work;
     } u;
     int pooln;
 };
 
+//------------------------------------------------------------------------------
+// Constants & Definitions
+//------------------------------------------------------------------------------
+#define PROGRAM_NAME "ccminer"
+#define LP_SCANTIME 60
+#define HEAVYCOIN_BLKHDR_SZ 84
+#define MNR_BLKHDR_SZ 80
+#define EQNONCE_OFFSET 30
+#define API_MCAST_CODE "FTW"
+#define API_MCAST_ADDR "224.0.0.75"
+
+//------------------------------------------------------------------------------
+// Global State Variables
+//------------------------------------------------------------------------------
+// Core globals
+pthread_mutex_t applog_lock;
+pthread_mutex_t stats_lock;
+pthread_mutex_t g_work_lock;
+pthread_mutex_t stratum_sock_lock;
+pthread_mutex_t stratum_work_lock;
+
+// Work/Mining state
+struct work _ALIGN(64) g_work;
+volatile time_t g_work_time;
+struct work_restart *work_restart = NULL;
+double thr_hashrates[MAX_GPUS] = {0};
+
+// Pool/Network state 
+struct pool_infos pools[MAX_POOLS] = {0}; 
+struct stratum_ctx stratum = {0};
+int num_pools = 1;
+volatile int cur_pooln = 0;
+
+// Thread info
+struct thr_info *thr_info = NULL;
+static int work_thr_id;
+int longpoll_thr_id = -1;
+int stratum_thr_id = -1;
+int api_thr_id = -1;
+
+// Configuration options
 bool opt_debug = false;
 bool opt_debug_diff = false;
 bool opt_debug_threads = false;
@@ -152,9 +182,6 @@ int opt_nfactor = 0;
 bool opt_autotune = true;
 
 // pools (failover/getwork infos)
-struct pool_infos pools[MAX_POOLS] = {0};
-int num_pools = 1;
-volatile int cur_pooln = 0;
 bool opt_pool_failover = true;
 volatile bool pool_on_hold = false;
 volatile bool pool_is_switching = false;
@@ -169,28 +196,15 @@ char *rpc_pass;
 char *rpc_url;
 char *short_url = NULL;
 
-struct stratum_ctx stratum = {0};
-pthread_mutex_t stratum_sock_lock;
-pthread_mutex_t stratum_work_lock;
-
 char *opt_cert;
 char *opt_proxy;
 long opt_proxy_type;
-struct thr_info *thr_info = NULL;
-static int work_thr_id;
 struct thr_api *thr_api;
-int longpoll_thr_id = -1;
-int stratum_thr_id = -1;
-int api_thr_id = -1;
 int monitor_thr_id = -1;
 bool stratum_need_reset = false;
 volatile bool abort_flag = false;
-struct work_restart *work_restart = NULL;
 static int app_exit_code = EXIT_CODE_OK;
 
-pthread_mutex_t applog_lock;
-pthread_mutex_t stats_lock;
-double thr_hashrates[MAX_GPUS] = {0};
 uint64_t global_hashrate = 0;
 double stratum_diff = 0.0;
 double net_diff = 0;
@@ -206,9 +220,6 @@ double opt_resume_diff = 0.;
 double opt_resume_rate = -1.;
 
 int opt_statsavg = 30;
-
-#define API_MCAST_CODE "FTW"
-#define API_MCAST_ADDR "224.0.0.75"
 
 // strdup on char* to allow a common free() if used
 static char *opt_syslog_pfx = strdup(PROGRAM_NAME);
@@ -392,10 +403,6 @@ struct option options[] = {
     {"diff-factor", 1, NULL, 'f'}, // compat
     {0, 0, 0, 0}};
 
-struct work _ALIGN(64) g_work;
-volatile time_t g_work_time;
-pthread_mutex_t g_work_lock;
-
 // get const array size (defined in ccminer.cpp)
 int options_count()
 {
@@ -455,8 +462,16 @@ static inline void drop_policy(void) {}
 static void affine_to_cpu_mask(int id, uint8_t mask) {}
 #endif
 
+//------------------------------------------------------------------------------
+// Function Prototypes
+//------------------------------------------------------------------------------
+static void parse_cmdline(int argc, char *argv[]);
 static bool get_blocktemplate(CURL *curl, struct work *work);
+static void *workio_thread(void *userdata);
+static void *stratum_thread(void *userdata);
+static void *longpoll_thread(void *userdata);
 
+// Utility Functions
 void get_currentalgo(char *buf, int sz)
 {
     snprintf(buf, sz, "%s", opt_algo);
