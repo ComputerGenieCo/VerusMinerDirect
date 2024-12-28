@@ -49,47 +49,13 @@ extern "C"
 #include <miner-config.h>
 #include "compat.h"
 #include "types.h"
+#include "constants.h"
 
 // ============= Basic Type Definitions =============
 
 	typedef unsigned char uchar;
 
 // ============= Logging & Debug Macros =============
-
-// Color and text definitions
-#define YES "yes!"
-#define YAY "yay!!!"
-#define BOO "booooo"
-
-#define CL_N "\x1B[0m"
-#define CL_RED "\x1B[31m"
-#define CL_GRN "\x1B[32m"
-#define CL_YLW "\x1B[33m"
-#define CL_BLU "\x1B[34m"
-#define CL_MAG "\x1B[35m"
-#define CL_CYN "\x1B[36m"
-
-#define CL_BLK "\x1B[22;30m" /* black */
-#define CL_RD2 "\x1B[22;31m" /* red */
-#define CL_GR2 "\x1B[22;32m" /* green */
-#define CL_YL2 "\x1B[22;33m" /* dark yellow */
-#define CL_BL2 "\x1B[22;34m" /* blue */
-#define CL_MA2 "\x1B[22;35m" /* magenta */
-#define CL_CY2 "\x1B[22;36m" /* cyan */
-#define CL_SIL "\x1B[22;37m" /* gray */
-
-#ifdef WIN32
-#define CL_GRY "\x1B[01;30m" /* dark gray */
-#else
-#define CL_GRY "\x1B[90m" /* dark gray selectable in putty */
-#endif
-#define CL_LRD "\x1B[01;31m" /* light red */
-#define CL_LGR "\x1B[01;32m" /* light green */
-#define CL_LYL "\x1B[01;33m" /* tooltips */
-#define CL_LBL "\x1B[01;34m" /* light blue */
-#define CL_LMA "\x1B[01;35m" /* light magenta */
-#define CL_LCY "\x1B[01;36m" /* light cyan */
-#define CL_WHT "\x1B[01;37m" /* white */
 
 // Log level definitions - must be first since they're used throughout
 #ifdef HAVE_SYSLOG_H
@@ -106,10 +72,6 @@ enum
 };
 #endif
 #endif
-
-// Custom log levels
-#define LOG_BLUE 0x10
-#define LOG_RAW 0x99
 
 // Define option struct early since it's used in multiple files
 #ifdef HAVE_GETOPT_LONG
@@ -327,14 +289,6 @@ struct option
 	}
 #endif
 
-	// ============= Constants & Configuration =============
-
-#define POK_MAX_TXS 4
-#define POK_MAX_TX_SZ 16384U
-#define MAX_NONCES 2
-#define MAX_POOLS 8
-#define MAX_GPUS 140
-
 	// ============= External Declarations =============
 
 	extern int options_count();
@@ -479,15 +433,6 @@ struct option
 	extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 	extern void tq_freeze(struct thread_q *tq);
 	extern void tq_thaw(struct thread_q *tq);
-
-#define EXIT_CODE_OK 0
-#define EXIT_CODE_USAGE 1
-#define EXIT_CODE_POOL_TIMEOUT 2
-#define EXIT_CODE_SW_INIT_ERROR 3
-#define EXIT_CODE_CUDA_NODEVICE 4
-#define EXIT_CODE_CUDA_ERROR 5
-#define EXIT_CODE_TIME_LIMIT 0
-#define EXIT_CODE_KILLED 7
 
 	void parse_arg(int key, char *arg);
 	void proper_exit(int reason);

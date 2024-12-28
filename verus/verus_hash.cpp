@@ -15,6 +15,7 @@
 #include "verus_clhash.h"
 #include "uint256.h"
 #include "miner.h"
+#include "../constants.h"
 
 constexpr int VERUS_KEY_SIZE = 8832;
 constexpr int VERUS_KEY_SIZE128 = 552;
@@ -29,7 +30,9 @@ enum
 
 constexpr int PROTOCOL_VERSION = 170002;
 
-constexpr int EQNONCE_OFFSET = 30;
+// Change from direct definition to using the constant from constants.h
+#include "../constants.h"
+// constexpr int EQNONCE_OFFSET = 30;
 constexpr int NONCE_OFT = EQNONCE_OFFSET;
 
 static bool init[MAX_GPUS] = { 0 };

@@ -45,6 +45,7 @@
 #include "types.h"
 #include "miner.h"
 #include "signal_handler.h"
+#include "constants.h"
 
 #ifdef WIN32
 #include <Mmsystem.h>
@@ -56,13 +57,6 @@ BOOL WINAPI ConsoleHandler(DWORD);
 //------------------------------------------------------------------------------
 // Constants & Definitions
 //------------------------------------------------------------------------------
-#define PROGRAM_NAME "ccminer"
-#define LP_SCANTIME 60
-#define HEAVYCOIN_BLKHDR_SZ 84
-#define MNR_BLKHDR_SZ 80
-#define EQNONCE_OFFSET 30
-#define API_MCAST_CODE "FTW"
-#define API_MCAST_ADDR "224.0.0.75"
 
 //------------------------------------------------------------------------------
 // Global State Variables
@@ -619,10 +613,6 @@ static bool work_decode(const json_t *val, struct work *work)
 
     return true;
 }
-
-#define YES "yes!"
-#define YAY "yay!!!"
-#define BOO "booooo"
 
 int share_result(int result, int pooln, double sharediff, const char *reason)
 {
@@ -1522,7 +1512,7 @@ static void *miner_thread(void *userdata)
 
         uint32_t *nonceptr = (uint32_t *)(((char *)work.data) + wcmplen);
 
-        nonceptr = &work.data[EQNONCE_OFFSET]; // 27 is pool extranonce (256bits nonce space)
+        nonceptr = &work.data[EQNONCE_OFFSET];
         wcmplen = 4 + 32 + 32;
 
         if (have_stratum)
