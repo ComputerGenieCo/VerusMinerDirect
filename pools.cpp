@@ -7,8 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "types.h"
 #include "miner.h"
-#include "compat.h"
 
 // to move in miner.h
 extern bool allow_gbt;

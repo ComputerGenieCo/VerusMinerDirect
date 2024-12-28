@@ -41,6 +41,8 @@
 #endif
 #endif
 
+#include "miner-config.h"
+#include "types.h"
 #include "miner.h"
 #include "signal_handler.h"
 
@@ -50,23 +52,6 @@
 #include "compat/winansi.h"
 BOOL WINAPI ConsoleHandler(DWORD);
 #endif
-
-// Define workio command types
-enum workio_commands {
-    WC_GET_WORK,
-    WC_SUBMIT_WORK,
-    WC_ABORT
-};
-
-// Define workio command structure
-struct workio_cmd {
-    enum workio_commands cmd;
-    struct thr_info *thr;
-    union {
-        struct work *work;
-    } u;
-    int pooln;
-};
 
 //------------------------------------------------------------------------------
 // Constants & Definitions

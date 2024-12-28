@@ -13,6 +13,7 @@
 #include "bignum.hpp"
 #endif
 
+#include "types.h"
 #include "miner.h" // hex2bin
 /*
 extern "C" double bn_convert_nbits(const uint32_t nBits)
