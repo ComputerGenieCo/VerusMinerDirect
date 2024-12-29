@@ -142,7 +142,9 @@ static void gpustatus(int thr_id)
 
 
 		// append to buffer for multi gpus
-		strcat(buffer, buf);
+		if (strlen(buffer) + strlen(buf) < MYBUFSIZ) {
+			strncat(buffer, buf, MYBUFSIZ - strlen(buffer) - 1);
+		}
 	}
 }
 
@@ -180,7 +182,7 @@ static char *getsummary(char *params)
 	get_currentalgo(algo, sizeof(algo));
 
 	*buffer = '\0';
-	snprintf(buffer, sizeof(buffer), "NAME=%s;VER=%s;API=%s;"
+	int ret = snprintf(buffer, sizeof(buffer), "NAME=%s;VER=%s;API=%s;"
 		"ALGO=%s;GPUS=%d;KHS=%.2f;SOLV=%d;ACC=%d;REJ=%d;"
 		"ACCMN=%.3f;DIFF=%.6f;NETKHS=%.0f;"
 		"POOLS=%u;WAIT=%u;UPTIME=%.0f;TS=%u|",
@@ -189,6 +191,9 @@ static char *getsummary(char *params)
 		solved_count, accepted_count, rejected_count,
 		accps, net_diff > 1e-6 ? net_diff : stratum_diff, (double)net_hashrate / 1000.,
 		num_pools, wait_time, uptime, (uint32_t) ts);
+	if (ret < 0 || ret >= sizeof(buffer)) {
+		buffer[sizeof(buffer)-1] = '\0'; // Ensure null termination
+	}
 	return buffer;
 }
 
@@ -292,9 +297,15 @@ static void syshwinfos()
 	uint32_t cpuclk = cpu_clock(0);
 
 	memset(buf, 0, sizeof(buf));
-	snprintf(buf, sizeof(buf), "OS=%s;NVDRIVER=%s;CPUS=%d;CPUTEMP=%d;CPUFREQ=%d|",
+	int ret = snprintf(buf, sizeof(buf), "OS=%s;NVDRIVER=%s;CPUS=%d;CPUTEMP=%d;CPUFREQ=%d|",
 		os_name(), driver_version, num_cpus, cputc, cpuclk/1000);
-	strcat(buffer, buf);
+	if (ret < 0 || ret >= sizeof(buf)) {
+		buf[sizeof(buf)-1] = '\0';
+	}
+	
+	if (strlen(buffer) + strlen(buf) < MYBUFSIZ) {
+		strncat(buffer, buf, MYBUFSIZ - strlen(buffer) - 1);
+	}
 }
 
 /**
@@ -559,10 +570,10 @@ static int websocket_handshake(SOCKETTYPE c, char *result, char *clientkey)
 	if (opt_protocol)
 		applog(LOG_DEBUG, "clientkey: %s", clientkey);
 
-	snprintf(inpkey, sizeof(inpkey), "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", clientkey);
-
-	// SHA-1 test from rfc, returns in base64 "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-	//snprintf(inpkey, sizeof(inpkey), "dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+	int ret = snprintf(inpkey, sizeof(inpkey), "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", clientkey);
+	if (ret < 0 || ret >= sizeof(inpkey)) {
+		return -1; // Buffer would overflow
+	}
 
 	mdctx = EVP_MD_CTX_new();
 	EVP_DigestInit_ex(mdctx, EVP_sha1(), NULL);
@@ -572,12 +583,15 @@ static int websocket_handshake(SOCKETTYPE c, char *result, char *clientkey)
 
 	base64_encode(sha1, sha1_len, seckey, sizeof(seckey));
 
-	snprintf(answer, sizeof(answer),
+	ret = snprintf(answer, sizeof(answer),
 		"HTTP/1.1 101 Switching Protocol\r\n"
 		"Upgrade: WebSocket\r\nConnection: Upgrade\r\n"
 		"Sec-WebSocket-Accept: %s\r\n"
 		"Sec-WebSocket-Protocol: text\r\n"
 		"\r\n", seckey);
+	if (ret < 0 || ret >= sizeof(answer)) {
+		return -1;
+	}
 
 	// data result as tcp frame
 
@@ -1245,11 +1259,12 @@ static void api()
 					applog(LOG_DEBUG, "API: exec command %s(%s)", buf, params ? params : "");
 
 				for (i = 0; i < CMDMAX; i++) {
-					if (strcmp(buf, cmds[i].name) == 0 && strlen(buf)) {
+					if (strncmp(buf, cmds[i].name, strlen(cmds[i].name)) == 0 && strlen(buf)) {
 						if (params && strlen(params)) {
 							// remove possible trailing |
-							if (params[strlen(params)-1] == '|')
-								params[strlen(params)-1] = '\0';
+							size_t plen = strlen(params);
+							if (plen > 0 && params[plen-1] == '|')
+								params[plen-1] = '\0';
 						}
 						result = (cmds[i].func)(params);
 						if (wskey) {

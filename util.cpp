@@ -134,7 +134,7 @@ void format_hashrate_unit(double hashrate, char *output, const char *unit)
 		hashrate *= 1e-12;
 	}
 
-	sprintf(output, "%.2f %s%s", hashrate, prefix, unit);
+	snprintf(output, 32, "%.2f %s%s", hashrate, prefix, unit);
 }
 
 static void databuf_free(struct data_buffer *db)
@@ -385,8 +385,8 @@ static json_t *json_rpc_call(CURL *curl, const char *url,
 	upload_data.buf = rpc_req;
 	upload_data.len = strlen(rpc_req);
 	upload_data.pos = 0;
-	sprintf(len_hdr, "Content-Length: %lu", (unsigned long) upload_data.len);
-	sprintf(hashrate_hdr, "X-Mining-Hashrate: %llu", (unsigned long long) global_hashrate);
+	snprintf(len_hdr, sizeof(len_hdr), "Content-Length: %lu", (unsigned long) upload_data.len);
+	snprintf(hashrate_hdr, sizeof(hashrate_hdr), "X-Mining-Hashrate: %llu", (unsigned long long) global_hashrate);
 
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 	headers = curl_slist_append(headers, len_hdr);
@@ -613,7 +613,7 @@ void cbin2hex(char *out, const char *in, size_t len)
 	if (out) {
 		unsigned int i;
 		for (i = 0; i < len; i++)
-			sprintf(out + (i * 2), "%02x", (uint8_t)in[i]);
+			snprintf(out + (i * 2), 3, "%02x", (uint8_t)in[i]);
 	}
 }
 
@@ -854,7 +854,8 @@ static void stratum_buffer_append(struct stratum_ctx *sctx, const char *s)
 		sctx->sockbuf_size = snew + (RBUFSIZE - (snew % RBUFSIZE));
 		sctx->sockbuf = (char*)realloc(sctx->sockbuf, sctx->sockbuf_size);
 	}
-	strcpy(sctx->sockbuf + old, s);
+	if (sctx->sockbuf)
+		strncat(sctx->sockbuf + old, s, sctx->sockbuf_size - old - 1);
 }
 
 char *stratum_recv_line(struct stratum_ctx *sctx)
@@ -956,7 +957,7 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	}
 	free(sctx->curl_url);
 	sctx->curl_url = (char*)malloc(strlen(url)+1);
-	sprintf(sctx->curl_url, "http%s", strstr(url, "://"));
+	snprintf(sctx->curl_url, strlen(url)+1, "http%s", strstr(url, "://"));
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -1125,11 +1126,11 @@ bool stratum_subscribe(struct stratum_ctx *sctx)
 start:
 	s = (char*)malloc(128 + (sctx->session_id ? strlen(sctx->session_id) : 0));
 	if (retry)
-		sprintf(s, "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": []}");
+		snprintf(s, 128 + (sctx->session_id ? strlen(sctx->session_id) : 0), "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": []}");
 	else if (sctx->session_id)
-		sprintf(s, "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"" USER_AGENT "\", \"%s\"]}", sctx->session_id);
+		snprintf(s, 128 + (sctx->session_id ? strlen(sctx->session_id) : 0), "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"" USER_AGENT "\", \"%s\"]}", sctx->session_id);
 	else
-		sprintf(s, "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"" USER_AGENT "\"]}");
+		snprintf(s, 128 + (sctx->session_id ? strlen(sctx->session_id) : 0), "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"" USER_AGENT "\"]}");
 
 	if (!stratum_send_line(sctx, s))
 		goto out;
@@ -1216,7 +1217,7 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 	
 
 	s = (char*)malloc(80 + strlen(user) + strlen(pass));
-	sprintf(s, "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
+	snprintf(s, 80 + strlen(user) + strlen(pass), "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 	        user, pass);
 
 	if (!stratum_send_line(sctx, s))
@@ -1261,7 +1262,7 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 		goto out;
 
 	// subscribe to extranonce (optional)
-	sprintf(s, "{\"id\": 3, \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
+	snprintf(s, 80 + strlen(user) + strlen(pass), "{\"id\": 3, \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
 
 	if (!stratum_send_line(sctx, s))
 		goto out;
@@ -1490,7 +1491,7 @@ static bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
 	
 	free(sctx->url);
 	sctx->url = (char*)malloc(32 + strlen(host));
-	sprintf(sctx->url, "stratum+tcp://%s:%d", host, port);
+	snprintf(sctx->url, 32 + strlen(host), "stratum+tcp://%s:%d", host, port);
 
 	applog(LOG_NOTICE, "Server requested reconnection to %s", sctx->url);
 
@@ -1507,7 +1508,7 @@ static bool stratum_pong(struct stratum_ctx *sctx, json_t *id)
 	if (!id || json_is_null(id))
 		return ret;
 
-	sprintf(buf, "{\"id\":%d,\"result\":\"pong\",\"error\":null}",
+	snprintf(buf, sizeof(buf), "{\"id\":%d,\"result\":\"pong\",\"error\":null}",
 		(int) json_integer_value(id));
 	ret = stratum_send_line(sctx, buf);
 
@@ -1943,7 +1944,7 @@ static char* format_hash(char* buf, uint8_t* h)
 	uchar *hash = (uchar*) h;
 	int len = 0;
 	for (int i=0; i < 32; i += 4) {
-		len += sprintf(buf+len, "%02x%02x%02x%02x ",
+		len += snprintf(buf+len, 128-len, "%02x%02x%02x%02x ",
 			hash[i], hash[i+1], hash[i+2], hash[i+3]);
 	}
 	return buf;
@@ -1958,7 +1959,7 @@ void applog_compare_hash(void *hash, void *hash_ref)
 	uchar* hash2 = (uchar*)hash_ref;
 	for (int i=0; i < 32; i += 4) {
 		const char *color = memcmp(hash1+i, hash2+i, 4) ? CL_WHT : CL_GRY;
-		len += sprintf(s+len, "%s%02x%02x%02x%02x " CL_GRY, color,
+		len += snprintf(s+len, sizeof(s)-len, "%s%02x%02x%02x%02x " CL_GRY, color,
 			hash1[i], hash1[i+1], hash1[i+2], hash1[i+3]);
 		s[len] = '\0';
 	}
