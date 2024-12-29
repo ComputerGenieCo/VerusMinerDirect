@@ -12,6 +12,8 @@
 //------------------------------------------------------------------------------
 // Standard Includes 
 //------------------------------------------------------------------------------
+#define LOGGING_EXTERN
+#include "logging.h"
 #include <miner-config.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +48,7 @@
 #include "miner.h"
 #include "signal_handler.h"
 #include "constants.h"
+#include "logging.h"
 
 #ifdef WIN32
 #include <Mmsystem.h>

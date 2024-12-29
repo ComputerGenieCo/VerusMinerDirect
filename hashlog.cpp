@@ -11,7 +11,7 @@
 #include <map>
 
 #include "miner.h"
-
+#include "logging.h"
 #define HI_DWORD(u64) ((uint32_t) (u64 >> 32))
 #define LO_DWORD(u64) ((uint32_t) u64)
 #define MK_HI64(u32) (0x100000000ULL * u32)

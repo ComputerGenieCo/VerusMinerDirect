@@ -32,7 +32,7 @@
 #include <sys/types.h>
 
 #include "miner.h"
-
+#include "logging.h"
 #ifndef WIN32
 # include <errno.h>
 # include <sys/socket.h>
