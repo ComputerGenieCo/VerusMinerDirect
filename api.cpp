@@ -209,7 +209,7 @@ static char *getpoolnfo(char *params)
 	*s = '\0';
 
 	if (stratum.job.job_id)
-		strncpy(jobid, stratum.job.job_id, sizeof(stratum.job.job_id));
+		strncpy(jobid, stratum.job.job_id, sizeof(jobid) - 1);
 	if (stratum.job.xnonce2) {
 		/* used temporary to be sure all is ok */
 		snprintf(extra, sizeof(extra), "0x");
@@ -640,7 +640,7 @@ static void setup_groups()
 	if (unlikely(!buf))
 		proper_exit(1); //, "Failed to malloc ipgroups buf");
 
-	strncpy(buf, api_groups, strlen(api_groups) + 1);
+	strncpy(buf, api_groups, strlen(buf) + 1);
 
 	next = buf;
 	// for each group defined
@@ -730,7 +730,7 @@ static void setup_groups()
 		if (unlikely(!ptr))
 			proper_exit(1); //, "Failed to malloc group commands buf");
 
-		strncpy(ptr, commands, strlen(commands) + 1);
+		strncpy(ptr, commands, strlen(ptr) + 1);
 	}
 
 	// Now define R (NOPRIVGROUP) as all non-iswritemode commands
@@ -750,9 +750,7 @@ static void setup_groups()
 	if (unlikely(!ptr))
 		proper_exit(1); //, "Failed to malloc noprivgroup commands buf");
 
-	strncpy(ptr, commands, strlen(commands) + 1);
-
-	// W (PRIVGROUP) is handled as a special case since it simply means all commands
+	strncpy(ptr, commands, strlen(ptr) + 1);
 
 	free(buf);
 	return;
@@ -776,7 +774,7 @@ static void setup_ipaccess()
 	if (unlikely(!buf))
 		proper_exit(1);//, "Failed to malloc ipaccess buf");
 
-	strncpy(buf, opt_api_allow, strlen(opt_api_allow) + 1);
+	strncpy(buf, opt_api_allow, strlen(buf) + 1);
 	ipcount = 1;
 	ptr = buf;
 	while (*ptr) if (*(ptr++) == ',')
