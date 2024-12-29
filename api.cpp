@@ -278,7 +278,7 @@ static const char* os_name()
 	FILE *fd = fopen("/proc/version", "r");
 	if (!fd)
 		return "linux";
-	if (!fscanf(fd, "Linux version %48s", &os_version[6])) {
+	if (fscanf(fd, "Linux version %48s", &os_version[6]) != 1) {
 		fclose(fd);
 		return "linux";
 	}
@@ -1274,7 +1274,11 @@ static void api()
 				/* Websocket requests compat. */
 				if ((msg = strstr(buf, "GET /")) && strlen(msg) > 5) {
 					char cmd[256] = { 0 };
-					sscanf(&msg[5], "%s\n", cmd);
+					if (sscanf(&msg[5], "%s\n", cmd) != 1) {
+						// Invalid request
+						CLOSESOCKET(c);
+						continue;
+					}
 					params = strchr(cmd, '/');
 					if (params)
 						*(params++) = '|';

@@ -32,7 +32,7 @@ static double linux_cputemp(int core)
 	if (!fd)
 		return tc;
 
-	if (fscanf(fd, "%d", &val))
+	if (fscanf(fd, "%d", &val) == 1)
 		tc = (double)val / 1000.0;
 
 	fclose(fd);
@@ -49,8 +49,8 @@ static uint32_t linux_cpufreq(int core)
 	if (!fd)
 		return freq;
 
-	if (!fscanf(fd, "%d", &freq))
-		;
+	if (fscanf(fd, "%d", &freq) != 1)
+		freq = 0;
 
 	fclose(fd);
 	return freq;
