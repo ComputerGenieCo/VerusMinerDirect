@@ -91,13 +91,21 @@ void get_defconfig_path(char *out, size_t bufsize, char *argv0)
 	const char *sep = strstr(dir, "\\") ? "\\" : "/";
 	struct stat info;
 #ifdef WIN32
-	snprintf(out, bufsize, "%s\\ccminer\\ccminer.conf\0", getenv("APPDATA"));
+	int ret = snprintf(out, bufsize, "%s\\ccminer\\ccminer.conf\0", getenv("APPDATA"));
 #else
-	snprintf(out, bufsize, "%s\\.ccminer\\ccminer.conf", getenv("HOME"));
+	int ret = snprintf(out, bufsize, "%s\\.ccminer\\ccminer.conf", getenv("HOME"));
 #endif
+	if (ret < 0 || ret >= bufsize) {
+		out[bufsize-1] = '\0';
+		return;
+	}
 	if (dir && stat(out, &info) != 0) {
 		// binary folder if not present in user folder
-		snprintf(out, bufsize, "%s%sccminer.conf%s", dir, sep, "");
+		ret = snprintf(out, bufsize, "%s%sccminer.conf%s", dir, sep, "");
+		if (ret < 0 || ret >= bufsize) {
+			out[bufsize-1] = '\0';
+			return;
+		}
 	}
 	if (stat(out, &info) != 0) {
 		out[0] = '\0';
@@ -110,31 +118,36 @@ void get_defconfig_path(char *out, size_t bufsize, char *argv0)
 #endif
 }
 
-void format_hashrate_unit(double hashrate, char *output, const char *unit)
+void format_hashrate_unit(double hashrate, char *output, const char *unit) 
 {
-	char prefix[2] = { 0, 0 };
+    char prefix[2] = { 0, 0 };
 
-	if (hashrate < 1e4) {
-		// nop
-	}
-	else if (hashrate < 1e6) {
-		prefix[0] = 'k';
-		hashrate *= 1e-3;
-	}
-	else if (hashrate < 1e9) {
-		prefix[0] = 'M';
-		hashrate *= 1e-6;
-	}
-	else if (hashrate < 1e12) {
-		prefix[0] = 'G';
-		hashrate *= 1e-9;
-	}
-	else {
-		prefix[0] = 'T';
-		hashrate *= 1e-12;
-	}
+    if (hashrate < 1e4) {
+        // nop
+    }
+    else if (hashrate < 1e6) {
+        prefix[0] = 'k';
+        hashrate *= 1e-3;
+    }
+    else if (hashrate < 1e9) {
+        prefix[0] = 'M';
+        hashrate *= 1e-6;
+    }
+    else if (hashrate < 1e12) {
+        prefix[0] = 'G';
+        hashrate *= 1e-9;
+    }
+    else {
+        prefix[0] = 'T';
+        hashrate *= 1e-12;
+    }
 
-	snprintf(output, 32, "%.2f %s%s", hashrate, prefix, unit);
+    // Use a smaller format string with less precision to fit in 16 bytes
+    int ret = snprintf(output, 16, "%.1f %s%s", hashrate, prefix, unit);
+    if (ret < 0 || ret >= 16) {
+        // If truncated, ensure null termination
+        output[15] = '\0';
+    }
 }
 
 static void databuf_free(struct data_buffer *db)
@@ -1943,9 +1956,14 @@ static char* format_hash(char* buf, uint8_t* h)
 {
 	uchar *hash = (uchar*) h;
 	int len = 0;
-	for (int i=0; i < 32; i += 4) {
-		len += snprintf(buf+len, 128-len, "%02x%02x%02x%02x ",
+	for (int i=0; i < 32 && len < 128; i += 4) {
+		int ret = snprintf(buf+len, 128-len, "%02x%02x%02x%02x ",
 			hash[i], hash[i+1], hash[i+2], hash[i+3]);
+		if (ret < 0 || ret >= (128-len)) {
+			buf[127] = '\0';
+			break;
+		}
+		len += ret;
 	}
 	return buf;
 }
@@ -1959,9 +1977,13 @@ void applog_compare_hash(void *hash, void *hash_ref)
 	uchar* hash2 = (uchar*)hash_ref;
 	for (int i=0; i < 32; i += 4) {
 		const char *color = memcmp(hash1+i, hash2+i, 4) ? CL_WHT : CL_GRY;
-		len += snprintf(s+len, sizeof(s)-len, "%s%02x%02x%02x%02x " CL_GRY, color,
+		int ret = snprintf(s+len, sizeof(s)-len, "%s%02x%02x%02x%02x " CL_GRY, color,
 			hash1[i], hash1[i+1], hash1[i+2], hash1[i+3]);
-		s[len] = '\0';
+		if (ret < 0 || ret >= (sizeof(s)-len)) {
+			s[sizeof(s)-1] = '\0';
+			break;
+		}
+		len += ret;
 	}
 	applog(LOG_DEBUG, "%s", s);
 }

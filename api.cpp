@@ -221,7 +221,7 @@ static char *getpoolnfo(char *params)
 		cbin2hex(&extra[2], (const char*) stratum.job.xnonce2, stratum.xnonce2_size);
 	}
 
-	snprintf(s, MYBUFSIZ, "POOL=%s;URL=%s;USER=%s;SOLV=%d;ACC=%d;REJ=%d;STALE=%u;H=%u;JOB=%s;DIFF=%.6f;"
+	int ret = snprintf(s, MYBUFSIZ, "POOL=%s;URL=%s;USER=%s;SOLV=%d;ACC=%d;REJ=%d;STALE=%u;H=%u;JOB=%s;DIFF=%.6f;"
 		"BEST=%.6f;N2SZ=%d;N2=%s;PING=%u;DISCO=%u;WAIT=%u;UPTIME=%u;LAST=%u|",
 		strlen(p->name) ? p->name : p->short_url,
 		p->url, p->type & POOL_STRATUM ? p->user : "",
@@ -229,7 +229,9 @@ static char *getpoolnfo(char *params)
 		stratum.job.height, jobid, stratum_diff, p->best_share,
 		(int) stratum.xnonce2_size, extra, stratum.answer_msec,
 		p->disconnects, p->wait_time, p->work_time, last_share);
-
+	if (ret < 0 || ret >= MYBUFSIZ) {
+		buffer[MYBUFSIZ-1] = '\0';
+	}
 	return s;
 }
 
@@ -332,12 +334,18 @@ static char *gethistory(char *params)
 	char *p = buffer;
 	int records = stats_get_history(thrid, data, ARRAY_SIZE(data));
 	*buffer = '\0';
+	size_t remaining = MYBUFSIZ;
+	
 	for (int i = 0; i < records; i++) {
 		time_t ts = data[i].tm_stat;
-		p += snprintf(p, MYBUFSIZ - (p - buffer), "CPU=%d;H=%u;KHS=%.2f;DIFF=%g;"
+		int ret = snprintf(p, remaining, "CPU=%d;H=%u;KHS=%.2f;DIFF=%g;"
 				"COUNT=%u;FOUND=%u;ID=%u;TS=%u|",
 			0, data[i].height, data[i].globalhashcount * 1.0, data[i].difficulty,
 			data[i].hashcount, data[i].hashfound, data[i].uid, (uint32_t)ts);
+		if (ret < 0 || ret >= remaining)
+			break;
+		p += ret;
+		remaining -= ret;
 	}
 	return buffer;
 }
@@ -351,14 +359,20 @@ static char *getscanlog(char *params)
 	char *p = buffer;
 	int records = hashlog_get_history(data, ARRAY_SIZE(data));
 	*buffer = '\0';
+	size_t remaining = MYBUFSIZ;
+
 	for (int i = 0; i < records; i++) {
 		time_t ts = data[i].tm_upd;
-		p += snprintf(p, MYBUFSIZ - (p - buffer), "H=%u;P=%u;JOB=%u;ID=%d;DIFF=%g;"
+		int ret = snprintf(p, remaining, "H=%u;P=%u;JOB=%u;ID=%d;DIFF=%g;"
 				"N=0x%x;FROM=0x%x;SCANTO=0x%x;"
 				"COUNT=0x%x;FOUND=%u;TS=%u|",
 			data[i].height, data[i].npool, data[i].njobid, (int)data[i].job_nonce_id, data[i].sharediff,
 			data[i].nonce, data[i].scanned_from, data[i].scanned_to,
 			(data[i].scanned_to - data[i].scanned_from), data[i].tm_sent ? 1 : 0, (uint32_t)ts);
+		if (ret < 0 || ret >= remaining)
+			break;
+		p += ret;
+		remaining -= ret;
 	}
 	return buffer;
 }
@@ -376,8 +390,11 @@ static char *getmeminfo(char *params)
 	totmem = smem + hmem;
 
 	*buffer = '\0';
-	snprintf(buffer, sizeof(buffer), "STATS=%u;HASHLOG=%u;MEM=%lu|",
+	int ret = snprintf(buffer, sizeof(buffer), "STATS=%u;HASHLOG=%u;MEM=%lu|",
 		srec, hrec, totmem);
+	if (ret < 0 || ret >= sizeof(buffer)) {
+		buffer[sizeof(buffer)-1] = '\0';
+	}
 
 	return buffer;
 }
@@ -430,8 +447,10 @@ static char *remote_seturl(char *params)
 static char *remote_quit(char *params)
 {
 	*buffer = '\0';
-	bye = 1;
-	snprintf(buffer, sizeof(buffer), "%s", "bye|");
+	int ret = snprintf(buffer, sizeof(buffer), "%s", "bye|");
+	if (ret < 0 || ret >= sizeof(buffer)) {
+		buffer[sizeof(buffer)-1] = '\0';
+	}
 	return buffer;
 }
 
@@ -464,12 +483,24 @@ struct CMDS {
 static char *gethelp(char *params)
 {
 	*buffer = '\0';
-	char * p = buffer;
+	char *p = buffer;
+	size_t remaining = MYBUFSIZ;
+	int ret;
+
 	for (int i = 0; i < CMDMAX-1; i++) {
 		bool displayed = !cmds[i].iswritemode || opt_api_allow;
-		if (displayed) p += snprintf(p, MYBUFSIZ - (p - buffer), "%s\n", cmds[i].name);
+		if (displayed) {
+			ret = snprintf(p, remaining, "%s\n", cmds[i].name);
+			if (ret < 0 || ret >= remaining)
+				break;
+			p += ret;
+			remaining -= ret;
+		}
 	}
-	snprintf(p, MYBUFSIZ - (p - buffer), "|");
+	ret = snprintf(p, remaining, "|");
+	if (ret < 0 || ret >= remaining) {
+		buffer[MYBUFSIZ-1] = '\0';
+	}
 	return buffer;
 }
 
@@ -493,66 +524,76 @@ static const char table64[]=
 
 static size_t base64_encode(const uchar *indata, size_t insize, char *outptr, size_t outlen)
 {
-	uchar ibuf[3];
-	uchar obuf[4];
-	int i, inputparts, inlen = (int) insize;
-	size_t len = 0;
-	char *output, *outbuf;
+    uchar ibuf[3];
+    uchar obuf[4];
+    int i, inputparts, inlen = (int) insize;
+    size_t len = 0;
+    char *output, *outbuf;
+    int ret = 0;  // Initialize ret at the start
 
-	memset(outptr, 0, outlen);
+    memset(outptr, 0, outlen);
 
-	outbuf = output = (char*)calloc(1, inlen * 4 / 3 + 4);
-	if (outbuf == NULL) {
-		return -1;
-	}
+    outbuf = output = (char*)calloc(1, inlen * 4 / 3 + 4);
+    if (outbuf == NULL) {
+        return -1;
+    }
 
-	while (inlen > 0) {
-		for (i = inputparts = 0; i < 3; i++) {
-			if (inlen  > 0) {
-				inputparts++;
-				ibuf[i] = (uchar) *indata;
-				indata++; inlen--;
-			}
-			else
-				ibuf[i] = 0;
-		}
+    while (inlen > 0) {
+        for (i = inputparts = 0; i < 3; i++) {
+            if (inlen  > 0) {
+                inputparts++;
+                ibuf[i] = (uchar) *indata;
+                indata++; inlen--;
+            }
+            else
+                ibuf[i] = 0;
+        }
 
-		obuf[0] = (uchar)  ((ibuf[0] & 0xFC) >> 2);
-		obuf[1] = (uchar) (((ibuf[0] & 0x03) << 4) | ((ibuf[1] & 0xF0) >> 4));
-		obuf[2] = (uchar) (((ibuf[1] & 0x0F) << 2) | ((ibuf[2] & 0xC0) >> 6));
-		obuf[3] = (uchar)   (ibuf[2] & 0x3F);
+        obuf[0] = (uchar)  ((ibuf[0] & 0xFC) >> 2);
+        obuf[1] = (uchar) (((ibuf[0] & 0x03) << 4) | ((ibuf[1] & 0xF0) >> 4));
+        obuf[2] = (uchar) (((ibuf[1] & 0x0F) << 2) | ((ibuf[2] & 0xC0) >> 6));
+        obuf[3] = (uchar)   (ibuf[2] & 0x3F);
 
-		switch(inputparts) {
-		case 1: /* only one byte read */
-			snprintf(output, 5, "%c%c==",
-				table64[obuf[0]],
-				table64[obuf[1]]);
-			break;
-		case 2: /* two bytes read */
-			snprintf(output, 5, "%c%c%c=",
-				table64[obuf[0]],
-				table64[obuf[1]],
-				table64[obuf[2]]);
-			break;
-		default:
-			snprintf(output, 5, "%c%c%c%c",
-				table64[obuf[0]],
-				table64[obuf[1]],
-				table64[obuf[2]],
-				table64[obuf[3]] );
-			break;
-		}
-		if ((len+4) > outlen)
-			break;
-		output += 4; len += 4;
-	}
-	len = snprintf(outptr, len, "%s", outbuf);
-	// todo: seems to be missing on linux
-	if (strlen(outptr) == 27)
-		strcat(outptr, "=");
-	free(outbuf);
+        switch(inputparts) {
+        case 1: /* only one byte read */
+            if (snprintf(output, 5, "%c%c==",
+                table64[obuf[0]],
+                table64[obuf[1]]) >= 5)
+                goto cleanup;
+            break;
+        case 2: /* two bytes read */
+            if (snprintf(output, 5, "%c%c%c=",
+                table64[obuf[0]],
+                table64[obuf[1]],
+                table64[obuf[2]]) >= 5)
+                goto cleanup;
+            break;
+        default:
+            if (snprintf(output, 5, "%c%c%c%c",
+                table64[obuf[0]],
+                table64[obuf[1]],
+                table64[obuf[2]],
+                table64[obuf[3]]) >= 5)
+                goto cleanup;
+            break;
+        }
+        if ((len+4) > outlen)
+            break;
+        output += 4; len += 4;
+    }
+    
+    ret = snprintf(outptr, len, "%s", outbuf);
+    if (ret < 0 || ret >= (int)len) {
+        goto cleanup;
+    }
 
-	return len;
+    // todo: seems to be missing on linux
+    if (strlen(outptr) == 27)
+        strcat(outptr, "=");
+
+cleanup:
+    free(outbuf);
+    return ret < 0 ? 0 : len;
 }
 
 #include <openssl/evp.h>
