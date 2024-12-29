@@ -643,9 +643,9 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
 
     format_hashrate(hashrate, s);
     if (opt_showdiff)
-        sprintf(suppl, "diff %.3f", sharediff);
+        snprintf(suppl, sizeof(suppl), "diff %.3f", sharediff);
     else // accepted percent
-        sprintf(suppl, "%.2f%%", 100. * p->accepted_count / (p->accepted_count + p->rejected_count));
+        snprintf(suppl, sizeof(suppl), "%.2f%%", 100. * p->accepted_count / (p->accepted_count + p->rejected_count));
 
     if (!net_diff || sharediff < net_diff)
     {
@@ -657,7 +657,7 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
         p->solved_count++;
         flag = use_colors ? (result ? CL_GRN YAY : CL_RED BOO)
                           : (result ? "(" YAY ")" : "(" BOO ")");
-        sprintf(solved, " solved: %u", p->solved_count);
+        snprintf(solved, sizeof(solved), " solved: %u", p->solved_count);
     }
 
     applog(LOG_NOTICE, "accepted: %lu/%lu (%s), %s %s%s",
@@ -782,7 +782,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
             applog(LOG_DEBUG, "share diff: %.5f (x %.1f)",
                    stratum.sharediff, work->shareratio[idnonce]);
 
-        sprintf(s, "{\"method\": \"mining.submit\", \"params\": ["
+        snprintf(s, sizeof(s), "{\"method\": \"mining.submit\", \"params\": ["
                    "\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\":%u}",
                 pool->user, work->job_id + 8, xnonce2str, ntimestr, noncestr, stratum.job.shares_count + 10);
 
@@ -821,7 +821,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
         }
 
         /* build JSON-RPC request */
-        sprintf(s,
+        snprintf(s, sizeof(s),
                 "{\"method\": \"getwork\", \"params\": [\"%s\"], \"id\":10}\r\n",
                 str);
 
@@ -873,7 +873,7 @@ static bool gbt_work_decode(const json_t *val, struct work *work)
                 {
                     char netinfo[64] = {0};
                     char srate[32] = {0};
-                    sprintf(netinfo, "diff %.2f", net_diff);
+                    snprintf(netinfo, sizeof(netinfo), "diff %.2f", net_diff);
                     if (net_hashrate)
                     {
                         format_hashrate((double)net_hashrate, srate);
@@ -1989,7 +1989,7 @@ wait_lp_url:
         if (!lp_url)
             goto out;
 
-        sprintf(lp_url, "%s%s%s", rpc_url, need_slash ? "/" : "", copy_start);
+        snprintf(lp_url, strlen(rpc_url) + strlen(copy_start) + 2, "%s%s%s", rpc_url, need_slash ? "/" : "", copy_start);
     }
 
     if (!pool_is_switching)
@@ -2034,11 +2034,11 @@ longpoll_retry:
                     char netinfo[64] = {0};
                     if (net_diff > 0.)
                     {
-                        sprintf(netinfo, ", diff %.3f", net_diff);
+                        snprintf(netinfo, sizeof(netinfo), "diff %.3f", net_diff);
                     }
                     if (opt_showdiff)
                     {
-                        sprintf(&netinfo[strlen(netinfo)], ", target %.3f", g_work.targetdiff);
+                        snprintf(&netinfo[strlen(netinfo)], sizeof(netinfo) - strlen(netinfo), ", target %.3f", g_work.targetdiff);
                     }
                     if (g_work.height)
                         applog(LOG_BLUE, "%s block %u%s", opt_algo, g_work.height, netinfo);
@@ -2523,7 +2523,7 @@ void parse_arg(int key, char *arg)
                 show_usage_and_exit(1);
             free(rpc_url);
             rpc_url = (char *)malloc(strlen(arg) + 8);
-            sprintf(rpc_url, "http://%s", arg);
+            snprintf(rpc_url, strlen(arg) + 8, "http://%s", arg);
             short_url = &rpc_url[7];
         }
         p = strrchr(rpc_url, '@');
@@ -2831,13 +2831,13 @@ void parse_config(json_t *json_obj)
         else if (options[i].has_arg && json_is_integer(val))
         {
             char buf[16];
-            sprintf(buf, "%d", (int)json_integer_value(val));
+            snprintf(buf, sizeof(buf), "%d", (int)json_integer_value(val));
             parse_arg(options[i].val, buf);
         }
         else if (options[i].has_arg && json_is_real(val))
         {
             char buf[16];
-            sprintf(buf, "%f", json_real_value(val));
+            snprintf(buf, sizeof(buf), "%f", json_real_value(val));
             parse_arg(options[i].val, buf);
         }
         else if (!options[i].has_arg)
