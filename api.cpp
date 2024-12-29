@@ -180,7 +180,7 @@ static char *getsummary(char *params)
 	get_currentalgo(algo, sizeof(algo));
 
 	*buffer = '\0';
-	sprintf(buffer, "NAME=%s;VER=%s;API=%s;"
+	snprintf(buffer, sizeof(buffer), "NAME=%s;VER=%s;API=%s;"
 		"ALGO=%s;GPUS=%d;KHS=%.2f;SOLV=%d;ACC=%d;REJ=%d;"
 		"ACCMN=%.3f;DIFF=%.6f;NETKHS=%.0f;"
 		"POOLS=%u;WAIT=%u;UPTIME=%.0f;TS=%u|",
@@ -212,7 +212,7 @@ static char *getpoolnfo(char *params)
 		strncpy(jobid, stratum.job.job_id, sizeof(stratum.job.job_id));
 	if (stratum.job.xnonce2) {
 		/* used temporary to be sure all is ok */
-		sprintf(extra, "0x");
+		snprintf(extra, sizeof(extra), "0x");
 		cbin2hex(&extra[2], (const char*) stratum.job.xnonce2, stratum.xnonce2_size);
 	}
 
@@ -323,7 +323,7 @@ static char *gethistory(char *params)
 	*buffer = '\0';
 	for (int i = 0; i < records; i++) {
 		time_t ts = data[i].tm_stat;
-		p += sprintf(p, "CPU=%d;H=%u;KHS=%.2f;DIFF=%g;"
+		p += snprintf(p, MYBUFSIZ - (p - buffer), "CPU=%d;H=%u;KHS=%.2f;DIFF=%g;"
 				"COUNT=%u;FOUND=%u;ID=%u;TS=%u|",
 			0, data[i].height, data[i].globalhashcount * 1.0, data[i].difficulty,
 			data[i].hashcount, data[i].hashfound, data[i].uid, (uint32_t)ts);
@@ -342,7 +342,7 @@ static char *getscanlog(char *params)
 	*buffer = '\0';
 	for (int i = 0; i < records; i++) {
 		time_t ts = data[i].tm_upd;
-		p += sprintf(p, "H=%u;P=%u;JOB=%u;ID=%d;DIFF=%g;"
+		p += snprintf(p, MYBUFSIZ - (p - buffer), "H=%u;P=%u;JOB=%u;ID=%d;DIFF=%g;"
 				"N=0x%x;FROM=0x%x;SCANTO=0x%x;"
 				"COUNT=0x%x;FOUND=%u;TS=%u|",
 			data[i].height, data[i].npool, data[i].njobid, (int)data[i].job_nonce_id, data[i].sharediff,
@@ -365,7 +365,7 @@ static char *getmeminfo(char *params)
 	totmem = smem + hmem;
 
 	*buffer = '\0';
-	sprintf(buffer, "STATS=%u;HASHLOG=%u;MEM=%lu|",
+	snprintf(buffer, sizeof(buffer), "STATS=%u;HASHLOG=%u;MEM=%lu|",
 		srec, hrec, totmem);
 
 	return buffer;
@@ -391,7 +391,7 @@ static char *remote_switchpool(char *params)
 		else if (n < num_pools)
 			ret = pool_switch(-1, n);
 	}
-	sprintf(buffer, "%s|", ret ? "ok" : "fail");
+	snprintf(buffer, sizeof(buffer), "%s|", ret ? "ok" : "fail");
 	return buffer;
 }
 
@@ -409,7 +409,7 @@ static char *remote_seturl(char *params)
 	} else {
 		ret = pool_switch_url(params);
 	}
-	sprintf(buffer, "%s|", ret ? "ok" : "fail");
+	snprintf(buffer, sizeof(buffer), "%s|", ret ? "ok" : "fail");
 	return buffer;
 }
 
@@ -420,7 +420,7 @@ static char *remote_quit(char *params)
 {
 	*buffer = '\0';
 	bye = 1;
-	sprintf(buffer, "%s", "bye|");
+	snprintf(buffer, sizeof(buffer), "%s", "bye|");
 	return buffer;
 }
 
@@ -456,9 +456,9 @@ static char *gethelp(char *params)
 	char * p = buffer;
 	for (int i = 0; i < CMDMAX-1; i++) {
 		bool displayed = !cmds[i].iswritemode || opt_api_allow;
-		if (displayed) p += sprintf(p, "%s\n", cmds[i].name);
+		if (displayed) p += snprintf(p, MYBUFSIZ - (p - buffer), "%s\n", cmds[i].name);
 	}
-	sprintf(p, "|");
+	snprintf(p, MYBUFSIZ - (p - buffer), "|");
 	return buffer;
 }
 
@@ -559,10 +559,10 @@ static int websocket_handshake(SOCKETTYPE c, char *result, char *clientkey)
 	if (opt_protocol)
 		applog(LOG_DEBUG, "clientkey: %s", clientkey);
 
-	sprintf(inpkey, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", clientkey);
+	snprintf(inpkey, sizeof(inpkey), "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", clientkey);
 
 	// SHA-1 test from rfc, returns in base64 "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-	//sprintf(inpkey, "dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+	//snprintf(inpkey, sizeof(inpkey), "dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
 	mdctx = EVP_MD_CTX_new();
 	EVP_DigestInit_ex(mdctx, EVP_sha1(), NULL);
@@ -572,7 +572,7 @@ static int websocket_handshake(SOCKETTYPE c, char *result, char *clientkey)
 
 	base64_encode(sha1, sha1_len, seckey, sizeof(seckey));
 
-	sprintf(answer,
+	snprintf(answer, sizeof(answer),
 		"HTTP/1.1 101 Switching Protocol\r\n"
 		"Upgrade: WebSocket\r\nConnection: Upgrade\r\n"
 		"Sec-WebSocket-Accept: %s\r\n"
@@ -640,7 +640,7 @@ static void setup_groups()
 	if (unlikely(!buf))
 		proper_exit(1); //, "Failed to malloc ipgroups buf");
 
-	strcpy(buf, api_groups);
+	strncpy(buf, api_groups, strlen(api_groups) + 1);
 
 	next = buf;
 	// for each group defined
@@ -695,9 +695,9 @@ static void setup_groups()
 				}
 				if (did) {
 					// skip duplicates
-					sprintf(cmdbuf, "|%s|", cmds[i].name);
+					snprintf(cmdbuf, sizeof(cmdbuf), "|%s|", cmds[i].name);
 					if (strstr(commands, cmdbuf) == NULL) {
-						strcpy(cmd, cmds[i].name);
+						strncpy(cmd, cmds[i].name, sizeof(commands) - (cmd - commands) - 1);
 						cmd += strlen(cmds[i].name);
 						*(cmd++) = '|';
 						*cmd = '\0';
@@ -715,9 +715,9 @@ static void setup_groups()
 			for (i = 0; i < CMDMAX-1; i++) {
 				if (cmds[i].iswritemode == false) {
 					// skip duplicates
-					sprintf(cmdbuf, "|%s|", cmds[i].name);
+					snprintf(cmdbuf, sizeof(cmdbuf), "|%s|", cmds[i].name);
 					if (strstr(commands, cmdbuf) == NULL) {
-						strcpy(cmd, cmds[i].name);
+						strncpy(cmd, cmds[i].name, sizeof(commands) - (cmd - commands) - 1);
 						cmd += strlen(cmds[i].name);
 						*(cmd++) = '|';
 						*cmd = '\0';
@@ -730,7 +730,7 @@ static void setup_groups()
 		if (unlikely(!ptr))
 			proper_exit(1); //, "Failed to malloc group commands buf");
 
-		strcpy(ptr, commands);
+		strncpy(ptr, commands, strlen(commands) + 1);
 	}
 
 	// Now define R (NOPRIVGROUP) as all non-iswritemode commands
@@ -739,7 +739,7 @@ static void setup_groups()
 	*cmd = '\0';
 	for (i = 0; i < CMDMAX-1; i++) {
 		if (cmds[i].iswritemode == false) {
-			strcpy(cmd, cmds[i].name);
+			strncpy(cmd, cmds[i].name, sizeof(commands) - (cmd - commands) - 1);
 			cmd += strlen(cmds[i].name);
 			*(cmd++) = '|';
 			*cmd = '\0';
@@ -750,7 +750,7 @@ static void setup_groups()
 	if (unlikely(!ptr))
 		proper_exit(1); //, "Failed to malloc noprivgroup commands buf");
 
-	strcpy(ptr, commands);
+	strncpy(ptr, commands, strlen(commands) + 1);
 
 	// W (PRIVGROUP) is handled as a special case since it simply means all commands
 
@@ -776,7 +776,7 @@ static void setup_ipaccess()
 	if (unlikely(!buf))
 		proper_exit(1);//, "Failed to malloc ipaccess buf");
 
-	strcpy(buf, opt_api_allow);
+	strncpy(buf, opt_api_allow, strlen(opt_api_allow) + 1);
 	ipcount = 1;
 	ptr = buf;
 	while (*ptr) if (*(ptr++) == ',')
@@ -1236,7 +1236,7 @@ static void api()
 						wskey++;
 						while ((*wskey) == ' ') wskey++; // ltrim
 					}
-					n = sprintf(buf, "%s", cmd);
+					n = snprintf(buf, sizeof(buf), "%s", cmd);
 				}
 
 				params = strchr(buf, '|');
