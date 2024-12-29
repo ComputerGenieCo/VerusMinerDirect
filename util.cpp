@@ -1913,9 +1913,16 @@ out:
  */
 size_t time2str(char* buf, time_t timer)
 {
-	struct tm* tm_info;
-	tm_info = localtime(&timer);
-	return strftime(buf, 19, "%H:%M:%S", tm_info);
+#ifdef WIN32
+    // Windows doesn't have localtime_r, use thread-safe localtime_s instead
+    struct tm tm_info;
+    localtime_s(&tm_info, &timer);
+    return strftime(buf, 19, "%H:%M:%S", &tm_info);
+#else
+    struct tm tm_info;
+    localtime_r(&timer, &tm_info);
+    return strftime(buf, 19, "%H:%M:%S", &tm_info);
+#endif
 }
 
 /**
