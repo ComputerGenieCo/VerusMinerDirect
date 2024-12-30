@@ -8,7 +8,7 @@
  * Software Foundation; either version 2 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
-#define APIVERSION "1.9"
+#include "constants.h"
 
 #ifdef WIN32
 # define  _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -39,13 +39,6 @@
 # include <netinet/in.h>
 # include <arpa/inet.h>
 # include <netdb.h>
-# define SOCKETTYPE long
-# define SOCKETFAIL(a) ((a) < 0)
-# define INVSOCK -1 /* INVALID_SOCKET */
-# define INVINETADDR -1 /* INADDR_NONE */
-# define CLOSESOCKET close
-# define SOCKETINIT {}
-# define SOCKERRMSG strerror(errno)
 #else
 # define SOCKETTYPE SOCKET
 # define SOCKETFAIL(a) ((a) == SOCKET_ERROR)
@@ -77,14 +70,6 @@ struct IP4ACCESS {
 static int ips = 1;
 static struct IP4ACCESS *ipaccess = NULL;
 
-#define MYBUFSIZ       16384
-#define SOCK_REC_BUFSZ 1024
-#define QUEUE          10
-
-#define ALLIP4         "0.0.0.0"
-static const char *localaddr = "127.0.0.1";
-static const char *UNAVAILABLE = " - API will not be available";
-static const char *MUNAVAILABLE = " - API multicast listener will not be available";
 static char *buffer = NULL;
 static time_t startup = 0;
 static int bye = 0;
@@ -186,7 +171,7 @@ static char *getsummary(char *params)
 		"ALGO=%s;GPUS=%d;KHS=%.2f;SOLV=%d;ACC=%d;REJ=%d;"
 		"ACCMN=%.3f;DIFF=%.6f;NETKHS=%.0f;"
 		"POOLS=%u;WAIT=%u;UPTIME=%.0f;TS=%u|",
-		PACKAGE_NAME, PACKAGE_VERSION, APIVERSION,
+		PACKAGE_NAME, PACKAGE_VERSION, API_VERSION,
 		algo, active_gpus, (double)global_hashrate / 1000.,
 		solved_count, accepted_count, rejected_count,
 		accps, net_diff > 1e-6 ? net_diff : stratum_diff, (double)net_hashrate / 1000.,
@@ -931,7 +916,7 @@ static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *gro
 	else if (strcmp(opt_api_bind, ALLIP4) == 0)
 		addrok = true;
 	else
-		addrok = (strcmp(*connectaddr, localaddr) == 0);
+		addrok = (strcmp(*connectaddr, LOCAL_ADDRESS) == 0);
 
 	return addrok;
 }
@@ -970,7 +955,7 @@ static void mcast()
 
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (const char *)(&optval), sizeof(optval)))) {
-		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", strerror(errno), MUNAVAILABLE);
+		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", strerror(errno), API_MCAST_UNAVAILABLE);
 		goto die;
 	}
 
@@ -995,12 +980,12 @@ static void mcast()
 	}
 
 	if (bound == 0) {
-		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_port, binderror, MUNAVAILABLE);
+		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_port, binderror, API_MCAST_UNAVAILABLE);
 		goto die;
 	}
 
 	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)(&grp), sizeof(grp)))) {
-		applog(LOG_ERR, "API mcast join failed (%s)%s", strerror(errno), MUNAVAILABLE);
+		applog(LOG_ERR, "API mcast join failed (%s)%s", strerror(errno), API_MCAST_UNAVAILABLE);
 		goto die;
 	}
 
@@ -1133,7 +1118,7 @@ static void api()
 	if (opt_api_allow) {
 		setup_ipaccess();
 		if (ips == 0) {
-			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
+			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", API_UNAVAILABLE);
 		}
 	}
 
@@ -1144,7 +1129,7 @@ static void api()
 
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
-		applog(LOG_ERR, "API initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
+		applog(LOG_ERR, "API initialisation failed (%s)%s", strerror(errno), API_UNAVAILABLE);
 		return;
 	}
 
@@ -1152,7 +1137,7 @@ static void api()
 	serv.sin_family = AF_INET;
 	serv.sin_addr.s_addr = inet_addr(addr); // TODO: allow bind to ip/interface
 	if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
-		applog(LOG_ERR, "API initialisation 2 failed (%s)%s", strerror(errno), UNAVAILABLE);
+		applog(LOG_ERR, "API initialisation 2 failed (%s)%s", strerror(errno), API_UNAVAILABLE);
 		// free(apisock); FIXME!!
 		return;
 	}
@@ -1207,13 +1192,13 @@ static void api()
 	}
 
 	if (bound == 0) {
-		applog(LOG_WARNING, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
+		applog(LOG_WARNING, "API bind to port %d failed (%s)%s", port, binderror, API_UNAVAILABLE);
 		free(apisock);
 		return;
 	}
 
 	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
-		applog(LOG_ERR, "API initialisation 3 failed (%s)%s", strerror(errno), UNAVAILABLE);
+		applog(LOG_ERR, "API initialisation 3 failed (%s)%s", strerror(errno), API_UNAVAILABLE);
 		CLOSESOCKET(*apisock);
 		free(apisock);
 		return;
@@ -1238,7 +1223,7 @@ static void api()
 		clisiz = sizeof(cli);
 		c = accept(*apisock, (struct sockaddr*) (&cli), &clisiz);
 		if (SOCKETFAIL(c)) {
-			applog(LOG_ERR, "API failed (%s)%s", strerror(errno), UNAVAILABLE);
+			applog(LOG_ERR, "API failed (%s)%s", strerror(errno), API_UNAVAILABLE);
 			CLOSESOCKET(*apisock);
 			free(apisock);
 			free(buffer);

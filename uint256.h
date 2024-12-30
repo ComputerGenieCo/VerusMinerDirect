@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <string>
 #include <vector>
+#include "constants.h"
 
 typedef long long  int64;
 typedef unsigned long long  uint64;

@@ -12,7 +12,10 @@
 //#define _GNU_SOURCE
 #define LOGGING_EXTERN
 #include "logging.h"
-#include <miner-config.h>
+#include "miner-config.h"
+#include "constants.h"
+#include "types.h"
+#include "miner.h"
 
 #include <stdio.h>
 #include <stdlib.h>

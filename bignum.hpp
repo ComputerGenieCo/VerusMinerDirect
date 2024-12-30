@@ -6,9 +6,7 @@
 #ifndef BITCOIN_BIGNUM_H
 #define BITCOIN_BIGNUM_H
 
-#ifndef PROTOCOL_VERSION
-#define PROTOCOL_VERSION 70001
-#endif
+#include "constants.h"
 
 #include <stdexcept>
 #include <vector>

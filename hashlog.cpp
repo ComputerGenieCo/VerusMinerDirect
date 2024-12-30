@@ -12,9 +12,7 @@
 
 #include "miner.h"
 #include "logging.h"
-#define HI_DWORD(u64) ((uint32_t) (u64 >> 32))
-#define LO_DWORD(u64) ((uint32_t) u64)
-#define MK_HI64(u32) (0x100000000ULL * u32)
+#include "constants.h"
 
 /* from miner.h
 struct hashlog_data {
@@ -36,8 +34,6 @@ struct hashlog_data {
 */
 
 static std::map<uint64_t, hashlog_data> tlastshares;
-
-#define LOG_PURGE_TIMEOUT 5*60
 
 extern struct stratum_ctx stratum;
 

@@ -8,14 +8,12 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <map>
-
 #include "miner.h"
 #include "logging.h"
+#include "constants.h"
+
 static std::map<uint64_t, stats_data> tlastscans;
 static uint64_t uid = 0;
-
-#define STATS_AVG_SAMPLES 30
-#define STATS_PURGE_TIMEOUT 120*60 /* 120 mn */
 
 extern uint64_t global_hashrate;
 extern int opt_statsavg;

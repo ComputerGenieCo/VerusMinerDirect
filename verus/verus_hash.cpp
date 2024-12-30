@@ -28,7 +28,6 @@ enum
 	SER_GETHASH = (1 << 2),
 };
 
-constexpr int PROTOCOL_VERSION = 170002;
 
 // Change from direct definition to using the constant from constants.h
 #include "../constants.h"

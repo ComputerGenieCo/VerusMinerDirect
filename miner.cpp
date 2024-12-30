@@ -3091,7 +3091,7 @@ int main(int argc, char *argv[])
 
     Clear();
     printf("*************************************************************\n");
-    printf("*  ccminer CPU: " PACKAGE_VERSION " for Verushash v2.2.2 based on ccminer *\n");
+    printf("*  " PROGRAM_NAME " CPU: " PACKAGE_VERSION " for Verushash v2.2.2 based on ccminer *\n");
     printf("*************************************************************\n");
 
     printf("Originally based on Christian Buchner and Christian H. project\n");

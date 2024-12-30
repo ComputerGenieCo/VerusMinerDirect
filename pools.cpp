@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "constants.h"
 
 #include "types.h"
 #include "miner.h"
