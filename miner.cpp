@@ -666,7 +666,7 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
            suppl, s, flag, solved);
     if (reason)
     {
-        applog(LOG_WARNING, "reject reason: %s", reason);
+        applog(LOG_BLUE, "reject reason: %s", reason);
         if (!check_dups && strncasecmp(reason, "duplicate", 9) == 0)
         {
             applog(LOG_WARNING, "enabling duplicates check feature");
@@ -1337,7 +1337,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
         stratum_diff = sctx->job.diff;
         if (opt_showdiff && work->targetdiff != stratum_diff)
             snprintf(sdiff, 32, " (%.5f)", work->targetdiff);
-        applog(LOG_WARNING, "Stratum difficulty set to %g%s", stratum_diff, sdiff);
+        applog(LOG_BLUE, "Stratum difficulty set to %g%s", stratum_diff, sdiff);
     }
 
     return true;
