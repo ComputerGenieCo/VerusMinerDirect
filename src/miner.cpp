@@ -1508,7 +1508,14 @@ static void *miner_thread(void *userdata)
         else
             nonceptr[0]++;
 
-        nonceptr[2] = rand() << 24 | rand() << 8 | thr_id;
+        // Get high precision timestamp for entropy
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        
+        // Mix thread ID, timestamp and random bits for unique nonce initialization
+        uint32_t timestamp = (uint32_t)(tv.tv_sec ^ tv.tv_usec);
+        uint32_t random_bits = (rand() & 0xFF) | ((rand() & 0xFF) << 8);
+        nonceptr[2] = (timestamp & 0xFFFF0000) | (random_bits << 8) | (thr_id & 0xFF);
 
         pthread_mutex_unlock(&g_work_lock);
 
