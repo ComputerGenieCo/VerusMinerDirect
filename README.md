@@ -1,4 +1,9 @@
 [![CodeQL](https://github.com/ComputerGenieCo/VerusMinerDirect/actions/workflows/codeql.yml/badge.svg)](https://github.com/ComputerGenieCo/VerusMinerDirect/actions/workflows/codeql.yml)
+[![Issues](https://img.shields.io/github/issues-raw/ComputerGenieCo/VerusMinerDirect)](https://github.com/ComputerGenieCo/VerusMinerDirect/issues)
+[![PRs](https://img.shields.io/github/issues-pr-raw/ComputerGenieCo/VerusMinerDirect)](https://github.com/ComputerGenieCo/VerusMinerDirect/pulls)
+[![Commits](https://img.shields.io/github/commit-activity/m/ComputerGenieCo/VerusMinerDirect)](https://github.com/ComputerGenieCo/VerusMinerDirect/commits/master)
+[![Contributors](https://img.shields.io/github/contributors/ComputerGenieCo/VerusMinerDirect)](https://github.com/ComputerGenieCo/VerusMinerDirect/graphs/contributors)
+[![Last Commit](https://img.shields.io/github/last-commit/ComputerGenieCo/VerusMinerDirect)](https://github.com/ComputerGenieCo/VerusMinerDirect/graphs/commit-activity)
 # VerusMinerDirect
 
 Based on ccminer-verus written by [Oink70](https://github.com/Oink70) and [monkins1010](https://github.com/monkins1010)  
