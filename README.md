@@ -1,3 +1,4 @@
+[![CodeQL](https://github.com/ComputerGenieCo/VerusMinerDirect/actions/workflows/codeql.yml/badge.svg)](https://github.com/ComputerGenieCo/VerusMinerDirect/actions/workflows/codeql.yml)
 # VerusMinerDirect
 
 Based on ccminer-verus written by [Oink70](https://github.com/Oink70) and [monkins1010](https://github.com/monkins1010)  
