@@ -46,6 +46,48 @@ double verus_network_diff(struct work *work)
 }
 
 /**
+ * Converts difficulty to target for Equihash.
+ *
+ * @param target The target value (output).
+ * @param diff The difficulty.
+ */
+void diff_to_target_equi(uint32_t *target, double diff)
+{
+    uint64_t m;
+    int k;
+
+    // Scale down the difficulty to fit within range
+    for (k = 6; k > 0 && diff > 1.0; k--)
+        diff /= 4294967296.0;
+
+    // Calculate the target value
+    m = (uint64_t)(4294901760.0 / diff);
+    if (m == 0 && k == 6)
+        memset(target, 0xff, 32);
+    else {
+        memset(target, 0, 32);
+        target[k + 1] = (uint32_t)(m >> 8);
+        target[k + 2] = (uint32_t)(m >> 40);
+        // Ensure leading zero bytes are set
+        for (k = 0; k < 28 && ((uint8_t*)target)[k] == 0; k++)
+            ((uint8_t*)target)[k] = 0xff;
+    }
+}
+
+/**
+ * Sets the target for the given work based on difficulty.
+ *
+ * @param work The work structure.
+ * @param diff The difficulty.
+ */
+void equi_work_set_target(struct work* work, double diff)
+{
+    // Convert difficulty to target and store it in work
+    diff_to_target_equi(work->target, diff);
+    work->targetdiff = diff;
+}
+
+/**
  * Sets the target for the stratum context from the given parameters.
  * @param sctx The stratum context.
  * @param params The JSON parameters containing the target.

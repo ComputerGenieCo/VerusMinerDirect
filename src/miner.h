@@ -484,7 +484,7 @@ bool equi_stratum_notify(struct stratum_ctx *sctx, json_t *params);
 bool equi_stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *params);
 bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params);
 bool equi_stratum_submit(struct pool_infos *pool, struct work *work);
-
+void equi_work_set_target(struct work* work, double diff);
 #ifdef __cplusplus
 }
 #endif

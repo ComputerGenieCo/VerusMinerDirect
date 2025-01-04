@@ -4,7 +4,7 @@
 
 make distclean-local && make clean-local || echo clean
 
-rm -f Makefile.in config.status
+rm -f Makefile.in config.status VerusMinerDirect
 
 #aclocal && autoheader && automake --add-missing --gnu --copy && autoconf || echo done
 #vs

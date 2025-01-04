@@ -1243,8 +1243,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
     if (opt_difficulty == 0.)
         opt_difficulty = 1.;
 
-    memcpy(work->target, sctx->job.extra, 32);
-    work->targetdiff = (sctx->job.diff / opt_difficulty);
+    equi_work_set_target(work, sctx->job.diff / opt_difficulty);
 
     if (stratum_diff != sctx->job.diff)
     {
@@ -1252,7 +1251,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
         stratum_diff = sctx->job.diff;
         if (opt_showdiff && work->targetdiff != stratum_diff)
             snprintf(sdiff, 32, " (%.5f)", work->targetdiff);
-        applog(LOG_BLUE, "Stratum difficulty set to %g%s", stratum_diff, sdiff);
+        applog(LOG_BLUE, "Stratum difficulty set to %.0f%s", stratum_diff, sdiff);
     }
 
     return true;
