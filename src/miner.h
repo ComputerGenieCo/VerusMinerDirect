@@ -28,6 +28,7 @@ extern "C"
 #include "compat.h"
 #include "types.h"
 #include "constants.h"
+#include "workio.h"
 
 // Platform-specific includes
 #ifdef HAVE_SYS_ENDIAN_H
@@ -310,6 +311,8 @@ extern volatile bool abort_flag;
 extern struct work_restart *work_restart;
 extern bool opt_trust_pool;
 extern uint16_t opt_vote;
+extern int opt_fail_pause;  ///< Pause between retries
+extern int opt_retries;     ///< Number of times to retry
 
 extern uint64_t global_hashrate;
 extern uint64_t net_hashrate;
@@ -485,6 +488,14 @@ bool equi_stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *par
 bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params);
 bool equi_stratum_submit(struct pool_infos *pool, struct work *work);
 void equi_work_set_target(struct work* work, double diff);
+
+// Work I/O related functions
+bool get_work(struct thr_info *thr, struct work *work);
+bool submit_work(struct thr_info *thr, const struct work *work_in); 
+void workio_abort(void);
+void *workio_thread(void *userdata);
+void initialize_mining_threads(int num_threads);
+
 #ifdef __cplusplus
 }
 #endif

@@ -210,23 +210,6 @@ struct work_restart {
     char padding[128 - sizeof(uint32_t)];
 };
 
-// Workio command types
-enum workio_commands {
-    WC_GET_WORK,
-    WC_SUBMIT_WORK,
-    WC_ABORT
-};
-
-// Workio command structure  
-struct workio_cmd {
-    enum workio_commands cmd;
-    struct thr_info *thr;
-    union {
-        struct work *work;
-    } u;
-    int pooln;
-};
-
 // Stats tracking structures
 struct stats_data {
     // Core identifiers

@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <curl/curl.h>
 #include <openssl/sha.h>
+#include "workio.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -60,7 +61,7 @@ int num_pools = 1;
 volatile int cur_pooln = 0;
 
 struct thr_info *thr_info = NULL;
-static int work_thr_id;
+int work_thr_id;
 int longpoll_thr_id = -1;
 int stratum_thr_id = -1;
 int api_thr_id = -1;
@@ -90,8 +91,8 @@ int use_roots = 0;
 static bool opt_background = false;
 bool opt_quiet = false;
 int opt_maxlograte = 3;
-static int opt_retries = -1;
-static int opt_fail_pause = 30;
+int opt_fail_pause = 30;
+int opt_retries = -1;
 int opt_time_limit = -1;
 int opt_shares_limit = -1;
 time_t firstwork_time = 0;
@@ -410,7 +411,6 @@ static void affine_to_cpu_mask(int id, uint8_t mask) {}
 
 static void parse_cmdline(int argc, char *argv[]);
 static bool get_blocktemplate(CURL *curl, struct work *work);
-static void *workio_thread(void *userdata);
 static void *stratum_thread(void *userdata);
 static void *longpoll_thread(void *userdata);
 
@@ -628,7 +628,7 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
     return 1;
 }
 
-static bool submit_upstream_work(CURL *curl, struct work *work)
+bool submit_upstream_work(CURL *curl, struct work *work)
 {
     char s[512];
     struct pool_infos *pool = &pools[work->pooln];
@@ -928,7 +928,7 @@ static bool get_mininginfo(CURL *curl, struct work *work)
 static const char *json_rpc_getwork =
     "{\"method\":\"getwork\",\"params\":[],\"id\":0}\r\n";
 
-static bool get_upstream_work(CURL *curl, struct work *work)
+bool get_upstream_work(CURL *curl, struct work *work)
 {
     bool rc = false;
     struct timeval tv_start, tv_end, diff;
@@ -970,229 +970,6 @@ static bool get_upstream_work(CURL *curl, struct work *work)
     get_blocktemplate(curl, work);
 
     return rc;
-}
-
-static void workio_cmd_free(struct workio_cmd *wc)
-{
-    if (!wc)
-        return;
-
-    switch (wc->cmd)
-    {
-    case WC_SUBMIT_WORK:
-        aligned_free(wc->u.work);
-        break;
-    default:
-        break;
-    }
-
-    memset(wc, 0, sizeof(*wc));
-    free(wc);
-}
-
-static void workio_abort()
-{
-    struct workio_cmd *wc;
-
-    wc = (struct workio_cmd *)calloc(1, sizeof(*wc));
-    if (!wc)
-        return;
-
-    wc->cmd = WC_ABORT;
-
-    if (!tq_push(thr_info[work_thr_id].q, wc))
-    {
-        workio_cmd_free(wc);
-    }
-}
-
-static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
-{
-    struct work *ret_work;
-    int failures = 0;
-
-    ret_work = (struct work *)aligned_calloc(sizeof(struct work));
-    if (!ret_work)
-        return false;
-
-    ret_work->pooln = wc->pooln;
-
-    while (!get_upstream_work(curl, ret_work))
-    {
-        if (unlikely(ret_work->pooln != cur_pooln))
-        {
-            applog(LOG_ERR, "get_work json_rpc_call failed");
-            aligned_free(ret_work);
-            tq_push(wc->thr->q, NULL);
-            return true;
-        }
-
-        if (unlikely((opt_retries >= 0) && (++failures > opt_retries)))
-        {
-            applog(LOG_ERR, "get_work json_rpc_call failed");
-            aligned_free(ret_work);
-            return false;
-        }
-
-        applog(LOG_ERR, "get_work failed, retry after %d seconds",
-               opt_fail_pause);
-        sleep(opt_fail_pause);
-    }
-
-    if (!tq_push(wc->thr->q, ret_work))
-        aligned_free(ret_work);
-
-    return true;
-}
-
-static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
-{
-    int failures = 0;
-    uint32_t pooln = wc->pooln;
-
-    while (!submit_upstream_work(curl, wc->u.work))
-    {
-        if (pooln != cur_pooln)
-        {
-            applog(LOG_DEBUG, "work from pool %u discarded", pooln);
-            return true;
-        }
-        if (unlikely((opt_retries >= 0) && (++failures > opt_retries)))
-        {
-            applog(LOG_ERR, "...terminating workio thread");
-            return false;
-        }
-        if (!opt_benchmark)
-            applog(LOG_ERR, "...retry after %d seconds", opt_fail_pause);
-
-        sleep(opt_fail_pause);
-    }
-
-    return true;
-}
-
-static void *workio_thread(void *userdata)
-{
-    struct thr_info *mythr = (struct thr_info *)userdata;
-    CURL *curl;
-    bool ok = true;
-
-    curl = curl_easy_init();
-    if (unlikely(!curl))
-    {
-        applog(LOG_ERR, "CURL initialization failed");
-        return NULL;
-    }
-
-    while (ok && !abort_flag)
-    {
-        struct workio_cmd *wc;
-
-        wc = (struct workio_cmd *)tq_pop(mythr->q, NULL);
-        if (!wc)
-        {
-            ok = false;
-            break;
-        }
-
-        switch (wc->cmd)
-        {
-        case WC_GET_WORK:
-            ok = workio_get_work(wc, curl);
-            break;
-        case WC_SUBMIT_WORK:
-
-            ok = workio_submit_work(wc, curl);
-
-            break;
-        case WC_ABORT:
-        default:
-            ok = false;
-            break;
-        }
-
-        if (!ok && num_pools > 1 && opt_pool_failover)
-        {
-            if (opt_debug_threads)
-                applog(LOG_DEBUG, "%s died, failover", __func__);
-            ok = pool_switch_next(-1);
-            tq_push(wc->thr->q, NULL);
-        }
-
-        workio_cmd_free(wc);
-    }
-
-    if (opt_debug_threads)
-        applog(LOG_DEBUG, "%s() died", __func__);
-    curl_easy_cleanup(curl);
-    tq_freeze(mythr->q);
-    return NULL;
-}
-
-bool get_work(struct thr_info *thr, struct work *work)
-{
-    struct workio_cmd *wc;
-    struct work *work_heap;
-
-    if (opt_benchmark)
-    {
-        memset(work->data, 0x55, 76);
-        memset(work->data + 19, 0x00, 52);
-        work->data[20] = 0x80000000;
-        work->data[31] = 0x00000280;
-
-        memset(work->target, 0x00, sizeof(work->target));
-        return true;
-    }
-
-    wc = (struct workio_cmd *)calloc(1, sizeof(*wc));
-    if (!wc)
-        return false;
-
-    wc->cmd = WC_GET_WORK;
-    wc->thr = thr;
-    wc->pooln = cur_pooln;
-
-    if (!tq_push(thr_info[work_thr_id].q, wc))
-    {
-        workio_cmd_free(wc);
-        return false;
-    }
-
-    work_heap = (struct work *)tq_pop(thr->q, NULL);
-    if (!work_heap)
-        return false;
-
-    memcpy(work, work_heap, sizeof(*work));
-    aligned_free(work_heap);
-
-    return true;
-}
-
-static bool submit_work(struct thr_info *thr, const struct work *work_in)
-{
-    struct workio_cmd *wc;
-    wc = (struct workio_cmd *)calloc(1, sizeof(*wc));
-    if (!wc)
-        return false;
-
-    wc->u.work = (struct work *)aligned_calloc(sizeof(*work_in));
-    if (!wc->u.work)
-        goto err_out;
-
-    wc->cmd = WC_SUBMIT_WORK;
-    wc->thr = thr;
-    memcpy(wc->u.work, work_in, sizeof(struct work));
-    wc->pooln = work_in->pooln;
-
-    if (!tq_push(thr_info[work_thr_id].q, wc))
-        goto err_out;
-
-    return true;
-
-err_out:
-    workio_cmd_free(wc);
-    return false;
 }
 
 static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
@@ -1243,7 +1020,9 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
     if (opt_difficulty == 0.)
         opt_difficulty = 1.;
 
-    equi_work_set_target(work, sctx->job.diff / opt_difficulty);
+    //equi_work_set_target(work, sctx->job.diff / opt_difficulty);
+    memcpy(work->target, sctx->job.extra, 32);
+    work->targetdiff = (sctx->job.diff / opt_difficulty);
 
     if (stratum_diff != sctx->job.diff)
     {
