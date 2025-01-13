@@ -2,7 +2,7 @@ AC_INIT([VerusMinerDirect], [3.9.0], [http://github.com/ComputerGenieCo/VerusMin
 top_srcdir=$(cd "$(dirname "$0")/.."; pwd)
 
 AC_PREREQ([2.71])
-AC_CONFIG_SRCDIR([../src/miner.cpp])
+AC_CONFIG_SRCDIR([../src/main.cpp])
 AM_INIT_AUTOMAKE([1.11 foreign subdir-objects -Wall -Werror])
 AM_SILENT_RULES([yes])
 AC_CONFIG_HEADERS([miner-config.h])

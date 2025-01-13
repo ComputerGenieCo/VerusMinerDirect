@@ -32,7 +32,7 @@
 
 #include "miner-config.h"
 #include "types.h"
-#include "miner.h"
+#include "main.h"
 #include "signal_handler.h"
 #include "constants.h"
 #include "logging.h"

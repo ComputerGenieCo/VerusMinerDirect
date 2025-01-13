@@ -8,18 +8,18 @@ JANSSON_INCLUDES=
 endif
 
 EXTRA_DIST		= autogen.sh README.md README.txt LICENSE.txt \
-			  ../src/compat/gettimeofday.c ../src/compat/getopt/getopt_long.c ../src/miner.h
+			  ../src/compat/gettimeofday.c ../src/compat/getopt/getopt_long.c ../src/main.h
 
 SUBDIRS = ../src/compat
 DIST_SUBDIRS = $(SUBDIRS)
 
 bin_PROGRAMS = VerusMinerDirect
 
-VerusMinerDirect_SOURCES	= ../src/elist.h ../src/miner.h ../src/compat.h \
+VerusMinerDirect_SOURCES	= ../src/elist.h ../src/main.h ../src/compat.h \
 			  ../src/compat/inttypes.h ../src/compat/stdbool.h ../src/compat/unistd.h ../src/bignum.cpp ../src/bignum.hpp \
 			  ../src/compat/sys/time.h ../src/compat/getopt/getopt.h \
 			  ../src/crc32.c ../src/signal_handler.cpp ../src/logging.cpp \
-			  ../src/miner.cpp ../src/workio.cpp ../src/pools.cpp ../src/util.cpp \
+			  ../src/main.cpp ../src/workio.cpp ../src/pools.cpp ../src/util.cpp \
 			  ../src/api.cpp ../src/hashlog.cpp ../src/stats.cpp ../src/sysinfos.cpp \
 			  ../src/verus/equi-stratum.cpp ../src/verus/verus_hash.cpp \
 			  ../src/verus/haraka.c ../src/verus/verus_clhash.cpp

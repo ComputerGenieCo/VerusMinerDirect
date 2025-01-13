@@ -1,5 +1,5 @@
 /**
- * @file miner.h
+ * @file main.h
  * @brief Main header file for the VerusMiner cryptocurrency mining application
  *
  * This file contains core type definitions, function declarations, and constants

@@ -10,11 +10,11 @@
 #include <memory.h>
 #include <map>
 
-#include "miner.h"
+#include "main.h"
 #include "logging.h"
 #include "constants.h"
 
-/* from miner.h
+/* from main.h
 struct hashlog_data {
 	uint8_t npool;
 	uint8_t pool_type;

@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 #include "types.h"
-#include "miner.h"
+#include "main.h"
 
 #ifdef __cplusplus
 extern "C" {

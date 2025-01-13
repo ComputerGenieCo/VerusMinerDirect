@@ -31,7 +31,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "miner.h"
+#include "main.h"
 #include "logging.h"
 #ifndef WIN32
 # include <errno.h>

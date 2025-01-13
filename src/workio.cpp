@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <curl/curl.h>
 
-#include "miner.h"
+#include "main.h"
 #include "workio.h"
 
 // External declarations
@@ -17,7 +17,7 @@ extern bool get_upstream_work(CURL *curl, struct work *work);
 extern int opt_fail_pause;
 extern int opt_retries;
 
-// External variables should match their declarations in miner.h
+// External variables should match their declarations in main.h
 extern volatile bool abort_flag;
 extern bool opt_debug_threads;
 extern bool opt_pool_failover;

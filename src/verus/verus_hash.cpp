@@ -14,7 +14,7 @@
 
 #include "verus_clhash.h"
 #include "../uint256.h"
-#include "../miner.h"
+#include "../main.h"
 #include "../constants.h"
 
 constexpr int VERUS_KEY_SIZE = 8832;

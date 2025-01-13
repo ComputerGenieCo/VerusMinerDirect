@@ -1,7 +1,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "miner.h"
+#include "main.h"
 
 #ifndef WIN32
 static void signal_handler(int sig)

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "miner.h"
+#include "main.h"
 
 #ifndef WIN32
 

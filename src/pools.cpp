@@ -9,9 +9,9 @@
 #include "constants.h"
 
 #include "types.h"
-#include "miner.h"
+#include "main.h"
 
-// to move in miner.h
+// to move in main.h
 extern bool allow_gbt;
 extern bool allow_mininginfo;
 extern bool check_dups;

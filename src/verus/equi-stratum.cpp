@@ -11,7 +11,7 @@
 #include <array>
 #include <string>
 #include <algorithm>
-#include "../miner.h"
+#include "../main.h"
 
 #define EQNONCE_OFFSET 30
 

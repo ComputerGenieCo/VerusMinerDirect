@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <map>
-#include "miner.h"
+#include "main.h"
 #include "logging.h"
 #include "constants.h"
 
