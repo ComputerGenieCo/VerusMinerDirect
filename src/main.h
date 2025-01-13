@@ -1,18 +1,8 @@
-/**
- * @file main.h
- * @brief Main header file for the VerusMiner cryptocurrency mining application
- *
- * This file contains core type definitions, function declarations, and constants
- * used throughout the VerusMiner application. It handles GPU mining operations,
- * network communication, and mining pool interactions.
- */
-
 #ifndef MINER_H
 #define MINER_H
 
-#include "config.h"
-
 // Core includes
+#include "config.h"
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -50,32 +40,21 @@
 #undef HAVE_SYSLOG_H
 #endif
 
-/**
- * @brief Type definition for unsigned char used throughout the application
- */
+// Basic type definitions
 typedef unsigned char uchar;
 
-// Platform-specific type definitions and enums
-#ifdef HAVE_SYSLOG_H
-#include <syslog.h>
-#else
 #ifndef LOG_ERR
-enum
-{
+enum {
     LOG_ERR,
-    LOG_WARNING,
+    LOG_WARNING, 
     LOG_NOTICE,
     LOG_INFO,
     LOG_DEBUG,
 };
 #endif
-#endif
 
-#ifdef HAVE_GETOPT_LONG
-#include <getopt.h>
-#else
-struct option
-{
+#ifndef HAVE_GETOPT_LONG
+struct option {
     const char *name;
     int has_arg;
     int *flag;
@@ -83,7 +62,7 @@ struct option
 };
 #endif
 
-// Constants and compiler macros
+// Constants and macros
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 
 #if JANSSON_MAJOR_VERSION >= 2
@@ -127,7 +106,7 @@ struct option
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-// Replace macro definitions with template functions
+// Utility inline functions
 #ifndef max
 template<typename T, typename U> 
 static inline auto max(T a, U b) -> decltype(a > b ? a : b) { 
@@ -287,60 +266,40 @@ static inline void le16enc(void *pp, uint16_t x)
 }
 #endif
 
-/**
- * @brief Global configuration variables controlling mining behavior
- */
-// Global variable declarations
-
-// Remove these duplicate declarations since they're in config.h
-// extern bool opt_benchmark;
-// extern bool opt_quiet;
-// extern bool opt_protocol; 
-// extern bool opt_showdiff;
-// extern int opt_n_threads;
-// extern int opt_timeout;
-// extern bool want_longpoll;
-// extern bool have_longpoll;
-// extern bool want_stratum;
-// extern bool have_stratum;
-// extern bool opt_stratum_stats;
-// extern char *opt_cert;
-// extern char *opt_proxy;
-// extern long opt_proxy_type;
-// extern bool opt_trust_pool;
-// extern uint16_t opt_vote;
-// extern int opt_fail_pause;
-// extern int opt_retries;
-
-// Keep non-duplicated declarations
+// Global Variables
+// Mining related
 extern int active_gpus;
-extern int use_pok;
-extern struct thr_info *thr_info;
+extern uint64_t global_hashrate;
+extern uint64_t net_hashrate;
+extern double net_diff;
+extern double stratum_diff;
+extern int cryptonight_fork;
+
+// Thread management
 extern int longpoll_thr_id;
 extern int stratum_thr_id;
 extern int api_thr_id;
 extern volatile bool abort_flag;
 extern struct work_restart *work_restart;
 
-extern uint64_t global_hashrate;
-extern uint64_t net_hashrate;
-extern double net_diff;
-extern double stratum_diff;
-
+// Device/GPU management
 extern char *device_name[MAX_GPUS];
 extern short device_map[MAX_GPUS];
 extern short device_mpcount[MAX_GPUS];
 extern long device_sm[MAX_GPUS];
 extern uint32_t device_plimit[MAX_GPUS];
 extern uint32_t gpus_intensity[MAX_GPUS];
-extern int opt_cudaschedule;
 
-extern int cryptonight_fork;
-
+// Pool management
 extern struct pool_infos pools[MAX_POOLS];
 extern int num_pools;
 extern volatile int cur_pooln;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// CUDA related functions
 extern int cuda_num_devices();
 void cuda_devicenames();
 void cuda_reset_device(int thr_id, bool *init);
@@ -350,110 +309,67 @@ int cuda_version();
 void cuda_print_devices();
 int cuda_gpu_info(struct cgpu_info *gpu);
 int cuda_available_memory(int thr_id);
-
 uint32_t cuda_default_throughput(int thr_id, uint32_t defcount);
 #define device_intensity(t, f, d) cuda_default_throughput(t, d)
 double throughput2intensity(uint32_t throughput);
 
+// Logging functions
+void applog(int prio, const char *fmt, ...);            
+void gpulog(int prio, int thr_id, const char *fmt, ...);
 void cuda_log_lasterror(int thr_id, const char *func, int line);
 void cuda_clear_lasterror();
 #define CUDA_LOG_ERROR() cuda_log_lasterror(thr_id, __func__, __LINE__)
 
-/**
- * @brief Core mining functions 
- */
-extern int options_count();                    ///< Get count of command line options
-extern void proper_exit(int reason);           ///< Clean program termination
-extern void restart_threads();                 ///< Restart all mining threads
-
-/**
- * @brief Utility functions for mining operations
- */
-extern void format_hashrate(double hashrate, char *output);     ///< Format hashrate for display
-extern void format_hashrate_unit(double hashrate, char *output, const char *unit); ///< Format hashrate with units
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// Move these logging functions inside extern "C" block
-void applog(int prio, const char *fmt, ...);            ///< Application logging
-void gpulog(int prio, int thr_id, const char *fmt, ...);///< GPU-specific logging
-
-// Move work-related functions inside extern "C" block
+// Work management functions
 bool get_work(struct thr_info *thr, struct work *work);
 bool submit_work(struct thr_info *thr, const struct work *work_in);
 void workio_abort(void);
 void *workio_thread(void *userdata);
-
-// Move scan_for_valid_hashes into extern "C" block
 int scan_for_valid_hashes(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 
-#ifdef __cplusplus
-}
-#endif
-
+// Utility functions
+extern int options_count();
+extern void proper_exit(int reason);
+extern void restart_threads();
+extern void format_hashrate(double hashrate, char *output);
+extern void format_hashrate_unit(double hashrate, char *output, const char *unit);
 extern void get_currentalgo(char *buf, int sz);
 extern void *aligned_calloc(int size);
 extern void aligned_free(void *ptr);
 
-/**
- * @brief Binary/hex conversion utilities
- */
-extern bool hex2bin(void *output, const char *hexstr, size_t len);     ///< Convert hex string to binary
-extern void cbin2hex(char *out, const char *in, size_t len);          ///< Convert binary to hex string with fixed buffer
-extern char *bin2hex(const uchar *in, size_t len);                    ///< Convert binary to hex string with allocation
+// Conversion functions
+extern bool hex2bin(void *output, const char *hexstr, size_t len);
+extern void cbin2hex(char *out, const char *in, size_t len);
+extern char *bin2hex(const uchar *in, size_t len);
+extern int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
 
-/**
- * @brief Time-related utility functions
- */
-extern int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y); ///< Calculate time difference
+// Configuration functions
+extern void get_defconfig_path(char *out, size_t bufsize, char *argv0);
 
-/**
- * @brief Configuration file handling
- */
-extern void get_defconfig_path(char *out, size_t bufsize, char *argv0); ///< Get default config file path
-
-/**
- * @brief Mining algorithm implementations
- */
-extern double verus_network_diff(struct work *work);           ///< Calculate network difficulty for Verus
-extern void work_set_target_ratio(struct work *work, uint32_t *hash); ///< Set work target ratio
-extern bool fulltest(const uint32_t *hash, const uint32_t *target);   ///< Test if hash meets target
+// Mining algorithm functions
+extern double verus_network_diff(struct work *work);
+extern void work_set_target_ratio(struct work *work, uint32_t *hash);
+extern bool fulltest(const uint32_t *hash, const uint32_t *target);
 extern void diff_to_target(uint32_t *target, double diff);
 extern void work_set_target(struct work *work, double diff);
 extern double target_to_diff(uint32_t *target);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-double bn_hash_target_ratio(uint32_t *hash, uint32_t *target);
-void bn_store_hash_target_ratio(uint32_t *hash, uint32_t *target, struct work *work, int nonce);
-void bn_set_target_ratio(struct work *work, uint32_t *hash, int nonce);
-
-#ifdef __cplusplus  
-}
-#endif
-
-/**
- * @brief Network and stratum protocol functions
- */
-extern void pool_init_defaults(void);                         ///< Initialize mining pool defaults
-extern void pool_set_creds(int pooln);                       ///< Set pool credentials
-extern void pool_set_attr(int pooln, const char *key, char *arg); ///< Set pool attributes
+// Pool management functions
+extern void pool_init_defaults(void);
+extern void pool_set_creds(int pooln);
+extern void pool_set_attr(int pooln, const char *key, char *arg);
 extern bool pool_switch(int thr_id, int pooln);
 extern bool pool_switch_url(char *params);
 extern bool pool_switch_next(int thr_id);
 extern int pool_get_first_valid(int startfrom);
 extern void pool_dump_infos(void);
 
-// ...existing code for other function declarations...
-
+// API related functions
 void *api_thread(void *userdata);
 void api_set_throughput(int thr_id, uint32_t throughput);
 void gpu_increment_reject(int thr_id);
 
+// Hash logging functions
 void hashlog_remember_submit(struct work *work, uint32_t nonce);
 void hashlog_remember_scan_range(struct work *work);
 double hashlog_get_sharediff(char *jobid, int idnonce, double defvalue);
@@ -467,6 +383,7 @@ void hashlog_purge_all(void);
 void hashlog_dump_job(char *jobid);
 void hashlog_getmeminfo(uint64_t *mem, uint32_t *records);
 
+// Stats functions
 void stats_remember_speed(int thr_id, uint32_t hashcount, double hashrate, uint8_t found, uint32_t height);
 double stats_get_speed(int thr_id, double def_speed);
 double stats_get_gpu_speed(int gpu_id);
@@ -475,8 +392,8 @@ void stats_purge_old(void);
 void stats_purge_all(void);
 void stats_getmeminfo(uint64_t *mem, uint32_t *records);
 
+// Thread queue functions
 struct thread_q;
-
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -484,14 +401,8 @@ extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 
-void parse_arg(int key, char *arg);
-
 size_t time2str(char *buf, time_t timer);
 char *atime2str(time_t timer);
-
-// Remove logging constants and functions that were moved to logging.h
-// Remove LOG_RAW and LOG_BLUE defines
-// Remove applog_hex, applog_hash, applog_hash64, applog_compare_hash declarations
 
 void print_hash_tests(void);
 
@@ -518,14 +429,20 @@ bool equi_stratum_set_target(struct stratum_ctx *sctx, json_t *params);
 bool equi_stratum_submit(struct pool_infos *pool, struct work *work);
 void equi_work_set_target(struct work* work, double diff);
 
-// Work I/O related functions
 bool get_work(struct thr_info *thr, struct work *work);
 bool submit_work(struct thr_info *thr, const struct work *work_in); 
 void workio_abort(void);
 void *workio_thread(void *userdata);
 void initialize_mining_threads(int num_threads);
 
-#ifdef __cplusplus
+double bn_hash_target_ratio(uint32_t *hash, uint32_t *target);
+void bn_store_hash_target_ratio(uint32_t *hash, uint32_t *target, struct work *work, int nonce);
+void bn_set_target_ratio(struct work *work, uint32_t *hash, int nonce);
+
+#ifdef __cplusplus  
+}
 #endif
+
+extern struct thr_info *thr_info;
 
 #endif /* MINER_H */

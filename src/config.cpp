@@ -1,3 +1,4 @@
+// System includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,84 +9,13 @@
 #include <jansson.h>
 #include <curl/curl.h>
 
+// Project includes
 #include "main.h"
 #include "config.h"
 #include "logging.h"
 
-// Define all the extern variables declared in config.h
-const char* opt_algo = NULL;
-bool opt_debug = false;
-bool opt_protocol = false;
-bool opt_benchmark = false;
-bool opt_redirect = false;
-bool opt_background = false;
-bool opt_quiet = false;
-bool opt_extranonce = true;
-bool want_longpoll = true;
-bool have_longpoll = false;
-bool want_stratum = true;
-bool have_stratum = false;
-bool allow_gbt = true;
-bool use_syslog = false;
-bool use_colors = true;
-bool opt_submit_stale = false;
-bool opt_keep_clocks = false;
-bool opt_showdiff = false;
-int opt_n_threads = 0;
-int opt_scantime = 10;
-int opt_retries = -1;
-int opt_fail_pause = 30;
-int opt_timeout = 300;
-int opt_time_limit = 0;
-int opt_shares_limit = 0;
-int num_cpus = 1;
-long opt_affinity = -1;
-int opt_priority = 0;
-double opt_difficulty = 1.0;
-double opt_max_temp = 0.0;
-double opt_max_diff = 0.0;
-double opt_max_rate = 0.0;
-double opt_resume_diff = 0.0;
-double opt_resume_rate = 0.0;
-double opt_resume_temp = 0.0;
-int opt_statsavg = 30;
-int opt_maxlograte = 3;
-uint16_t opt_vote = 9999;
-int opt_api_port = 4068;
-int use_pok = 0;
-// API related variables
-char *opt_api_allow = NULL;
-char *opt_api_bind = NULL;
-char *opt_api_groups = NULL;
-bool opt_api_mcast = false;
-char *opt_api_mcast_addr = NULL;
-char *opt_api_mcast_code = NULL;
-char *opt_api_mcast_des = NULL;
-int opt_api_mcast_port = 4068;
-
-// RPC related variables
-char *rpc_user = NULL;
-char *rpc_pass = NULL;
-char *rpc_url = NULL;
-char *short_url = NULL;
-
-// JSON config
-json_t *opt_config = NULL;
-
-// New variables
-char *opt_cert = NULL;
-char *opt_proxy = NULL;
-long opt_proxy_type = CURLPROXY_HTTP;
-bool opt_trust_pool = false;
-bool opt_stratum_stats = false;
-
-// Initialize debug option variables
-bool opt_debug_threads = false;
-bool opt_debug_diff = false;
-
-char *opt_syslog_pfx = nullptr;
-
-const char usage[] = "\
+// Constants
+static char const usage[] = "\
 Usage: " PROGRAM_NAME " [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the hash algorithm to use\n\
@@ -165,7 +95,6 @@ Options:\n\
   -h, --help            display this help text and exit\n\
 ";
 
-// Keep array declaration as is
 const char short_options[] =
 #ifdef HAVE_SYSLOG_H
     "S"
@@ -252,6 +181,93 @@ struct option options[] = {
     {"diff-factor", 1, NULL, 'f'},
     {0, 0, 0, 0}};
 
+// Global Variables - Algorithm/Mining related
+const char* opt_algo = NULL;
+int opt_n_threads = 0;
+int opt_scantime = 10;
+int opt_retries = -1;
+int opt_fail_pause = 30;
+int opt_timeout = 300;
+int opt_time_limit = 0;
+int opt_shares_limit = 0;
+double opt_difficulty = 1.0;
+int opt_cudaschedule = -1;
+int opt_nfactor = 0;
+int gpu_threads = 1;
+
+// Control flags
+bool opt_debug = false;
+bool opt_protocol = false;
+bool opt_benchmark = false;
+bool opt_redirect = false;
+bool opt_background = false;
+bool opt_quiet = false;
+bool opt_extranonce = true;
+bool opt_submit_stale = false;
+bool opt_keep_clocks = false;
+bool opt_showdiff = false;
+bool opt_autotune = true;
+bool opt_debug_threads = false;
+bool opt_debug_diff = false;
+
+// Network/Pool related
+bool want_longpoll = true;
+bool have_longpoll = false;
+bool want_stratum = true;
+bool have_stratum = false;
+bool allow_gbt = true;
+bool check_dups = false;
+bool check_stratum_jobs = false;
+bool submit_old = false;
+time_t firstwork_time = 0;
+bool allow_mininginfo = true;
+
+// System related
+int num_cpus = 1;
+long opt_affinity = -1;
+int opt_priority = 0;
+bool use_syslog = false;
+bool use_colors = true;
+
+// Monitoring/Performance
+double opt_max_temp = 0.0;
+double opt_max_diff = 0.0;
+double opt_max_rate = 0.0;
+double opt_resume_diff = 0.0;
+double opt_resume_rate = 0.0;
+double opt_resume_temp = 0.0;
+int opt_statsavg = 30;
+int opt_maxlograte = 3;
+
+// API related
+uint16_t opt_vote = 9999;
+int opt_api_port = 4068;
+char *opt_api_allow = NULL;
+char *opt_api_bind = NULL;
+char *opt_api_groups = NULL;
+bool opt_api_mcast = false;
+char *opt_api_mcast_addr = NULL;
+char *opt_api_mcast_code = NULL;
+char *opt_api_mcast_des = NULL;
+int opt_api_mcast_port = 4068;
+
+// Network security/authentication
+char *opt_cert = NULL;
+char *opt_proxy = NULL;
+long opt_proxy_type = CURLPROXY_HTTP;
+bool opt_trust_pool = false;
+bool opt_stratum_stats = false;
+char *rpc_user = NULL;
+char *rpc_pass = NULL;
+char *rpc_url = NULL;
+char *short_url = NULL;
+
+// Miscellaneous
+json_t *opt_config = NULL;
+int use_pok = 0;
+char *opt_syslog_pfx = nullptr;
+
+// Function implementations
 int options_count()
 {
     int n = 0;
@@ -856,14 +872,12 @@ void parse_single_opt(int opt, int argc, char *argv[])
     optind = prev;
 }
 
-// Add global initialization function
 void init_config_defaults() {
-    // Initialize strings to NULL or defaults
     rpc_user = NULL;
     rpc_pass = NULL; 
     rpc_url = NULL;
     short_url = NULL;
-    opt_api_bind = strdup("127.0.0.1"); // Default API bind address
+    opt_api_bind = strdup("127.0.0.1");
     opt_api_allow = NULL;
     opt_api_groups = NULL;
     opt_api_mcast_addr = NULL;
@@ -873,9 +887,8 @@ void init_config_defaults() {
     opt_proxy = NULL;
     opt_syslog_pfx = NULL;
 
-    // Initialize other defaults
     opt_algo = "verus";
-    opt_n_threads = 0; // Will be set based on GPU count
+    opt_n_threads = 0;
     opt_scantime = 10;
     opt_retries = -1;
     opt_fail_pause = 30;
@@ -883,12 +896,10 @@ void init_config_defaults() {
     opt_api_port = 4068;
     opt_proxy_type = CURLPROXY_HTTP;
     
-    // Initialize pools array
     memset(pools, 0, sizeof(pools));
     num_pools = 0;
     cur_pooln = 0;
 
-    // Set initial boolean flags
     want_longpoll = true;
     want_stratum = true;
     have_stratum = false;
@@ -898,9 +909,7 @@ void init_config_defaults() {
     opt_trust_pool = false;
 }
 
-// Add cleanup function
 void free_config() {
-    // Free allocated strings
     free(rpc_user);
     free(rpc_pass);
     free(rpc_url);
@@ -914,17 +923,14 @@ void free_config() {
     free(opt_proxy);
     free(opt_syslog_pfx);
 
-    // Free JSON config if exists
     if (opt_config) {
         json_decref(opt_config);
         opt_config = NULL;
     }
 
-    // Clean up pools
     for (int i = 0; i < MAX_POOLS; i++) {
         if (pools[i].url) free(pools[i].url);
         if (pools[i].user) free(pools[i].user);
         if (pools[i].pass) free(pools[i].pass);
-        // ...free other pool members...
     }
 }

@@ -1,6 +1,9 @@
+// Verus CPU Miner - Mining functionality for the Verus cryptocurrency
+
+// Global definitions
 #define LOGGING_EXTERN
-#include "logging.h"
-#include <miner-config.h>
+
+// System includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +16,24 @@
 #include <signal.h>
 #include <curl/curl.h>
 #include <openssl/sha.h>
-#include "workio.h"
 
+// Project includes
+#include "logging.h"
+#include "miner-config.h"
+#include "workio.h"
+#include "main.h"
+#include "signal_handler.h"
+#include "constants.h"
+#include "config.h"
+
+// Platform-specific includes
 #ifdef WIN32
 #include <windows.h>
 #include <stdint.h>
+#include <Mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+#include "compat/winansi.h"
+BOOL WINAPI ConsoleHandler(DWORD);
 #else
 #include <errno.h>
 #include <sys/resource.h>
@@ -29,43 +45,33 @@
 #endif
 #endif
 
-#include "miner-config.h"
-#include "types.h"
-#include "main.h"
-#include "signal_handler.h"
-#include "constants.h"
-#include "config.h"
-
-
-#ifdef WIN32
-#include <Mmsystem.h>
-#pragma comment(lib, "winmm.lib")
-#include "compat/winansi.h"
-BOOL WINAPI ConsoleHandler(DWORD);
-#endif
-
+// Global variables - Mutex locks
 pthread_mutex_t applog_lock;
 pthread_mutex_t stats_lock;
 pthread_mutex_t g_work_lock;
 pthread_mutex_t stratum_sock_lock;
 pthread_mutex_t stratum_work_lock;
 
+// Global variables - Mining state
 struct work _ALIGN(64) g_work;
 volatile time_t g_work_time;
 struct work_restart *work_restart = NULL;
 double thr_hashrates[MAX_GPUS] = {0};
 
+// Global variables - Pool state
 struct pool_infos pools[MAX_POOLS] = {0}; 
 struct stratum_ctx stratum = {0};
 int num_pools = 1;
 volatile int cur_pooln = 0;
 
+// Global variables - Thread management
 struct thr_info *thr_info = NULL;
 int work_thr_id;
 int longpoll_thr_id = -1;
 int stratum_thr_id = -1;
 int api_thr_id = -1;
 
+// Global variables - Device state
 extern const char *opt_algo;
 int active_gpus;
 bool need_nvsettings = false;
@@ -75,7 +81,6 @@ short device_map[MAX_GPUS] = {0};
 long device_sm[MAX_GPUS] = {0};
 short device_mpcount[MAX_GPUS] = {0};
 int opt_led_mode = 0;
-int opt_cudaschedule = -1;
 
 int device_batchsize[MAX_GPUS] = {0};
 int device_texturecache[MAX_GPUS] = {0};
@@ -86,22 +91,20 @@ int device_backoff[MAX_GPUS] = {0};
 int device_bfactor[MAX_GPUS] = {0};
 int device_lookup_gap[MAX_GPUS] = {0};
 int device_interactive[MAX_GPUS] = {0};
-int opt_nfactor = 0;
-bool opt_autotune = true;
 
+// Global variables - Pool failover state
 bool opt_pool_failover = true;
 volatile bool pool_on_hold = false;
 volatile bool pool_is_switching = false;
 volatile int pool_switch_count = 0;
 bool conditional_pool_rotate = false;
 
+// External options
 extern char *opt_scratchpad_url;
-
 extern char *rpc_user;
 extern char *rpc_pass;
 extern char *rpc_url;
 extern char *short_url;
-
 extern char *opt_cert;
 extern char *opt_proxy;
 extern long opt_proxy_type;
@@ -111,6 +114,7 @@ bool stratum_need_reset = false;
 volatile bool abort_flag = false;
 static int app_exit_code = EXIT_CODE_OK;
 
+// Global variables - Network state
 uint64_t global_hashrate = 0;
 double stratum_diff = 0.0;
 double net_diff = 0;
@@ -118,6 +122,7 @@ uint64_t net_hashrate = 0;
 uint64_t net_blocks = 0;
 uint8_t conditional_state[MAX_GPUS] = {0};
 
+// External options
 extern char *opt_syslog_pfx;
 extern char *opt_api_bind;
 extern char *opt_api_allow;
@@ -128,14 +133,42 @@ extern char *opt_api_mcast_des;
 
 int cryptonight_fork = 1;
 
-bool check_dups = false;
-bool check_stratum_jobs = false; 
-bool submit_old = false;
-time_t firstwork_time = 0;
-int gpu_threads = 1;
-extern bool allow_gbt;
-bool allow_mininginfo = true;
+// Static function declarations
+static void calc_network_diff(struct work *work);
+static bool work_decode(const json_t *val, struct work *work);
+static bool gbt_work_decode(const json_t *val, struct work *work);
+static bool get_blocktemplate(CURL *curl, struct work *work);
+static bool get_mininginfo(CURL *curl, struct work *work);
+static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work);
+static void *stratum_thread(void *userdata);
+static void *longpoll_thread(void *userdata);
+static void *miner_thread(void *userdata);
+static bool wanna_mine(int thr_id);
+static void affine_to_cpu(int id);
+static void affine_to_cpu_mask(int id, unsigned long mask);
+static inline void drop_policy(void);
+void parse_cmdline(int argc, char *argv[]);
+void get_currentalgo(char *buf, int sz);
+void format_hashrate(double hashrate, char *output);
+void cleanup_resources();
+void proper_exit(int reason);
+bool jobj_binary(const json_t *obj, const char *key, void *buf, size_t buflen);
+int share_result(int result, int pooln, double sharediff, const char *reason);
+bool submit_upstream_work(CURL *curl, struct work *work);
+bool get_upstream_work(CURL *curl, struct work *work);
+void restart_threads(void);
+void set_thread_priority(int thr_id);
+void set_cpu_affinity(int thr_id);
+void log_hash_rates(int thr_id, uint64_t loopcnt, time_t *tm_rate_log);
+bool handle_stratum_response(char *buf);
+void Clear();
+void initialize_mutexes();
+bool initialize_curl();
+void parse_command_line_arguments(int argc, char *argv[]);
+void initialize_mining_threads(int num_threads);
+int main(int argc, char *argv[]);
 
+// Static utility functions
 #ifdef __linux
 #include <sched.h>
 static inline void drop_policy(void)
@@ -185,11 +218,7 @@ static inline void drop_policy(void) {}
 static void affine_to_cpu_mask(int id, uint8_t mask) {}
 #endif
 
-void parse_cmdline(int argc, char *argv[]);
-static bool get_blocktemplate(CURL *curl, struct work *work);
-static void *stratum_thread(void *userdata);
-static void *longpoll_thread(void *userdata);
-
+// Function implementations
 void get_currentalgo(char *buf, int sz)
 {
     snprintf(buf, sz, "%s", opt_algo);
@@ -797,7 +826,6 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
     if (opt_difficulty == 0.)
         opt_difficulty = 1.;
 
-    //equi_work_set_target(work, sctx->job.diff / opt_difficulty);
     memcpy(work->target, sctx->job.extra, 32);
     work->targetdiff = (sctx->job.diff / opt_difficulty);
 
@@ -1063,11 +1091,9 @@ static void *miner_thread(void *userdata)
         else
             nonceptr[0]++;
 
-        // Get high precision timestamp for entropy
         struct timeval tv;
         gettimeofday(&tv, NULL);
         
-        // Mix thread ID, timestamp and random bits for unique nonce initialization
         uint32_t timestamp = (uint32_t)(tv.tv_sec ^ tv.tv_usec);
         uint32_t random_bits = (rand() & 0xFF) | ((rand() & 0xFF) << 8);
         nonceptr[2] = (timestamp & 0xFFFF0000) | (random_bits << 8) | (thr_id & 0xFF);
@@ -1865,7 +1891,6 @@ int main(int argc, char *argv[])
     long flags;
     int i;
 
-    // Initialize config defaults first
     init_config_defaults();
 
     parse_single_opt('q', argc, argv);
