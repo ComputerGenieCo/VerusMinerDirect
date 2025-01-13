@@ -1,6 +1,10 @@
 #ifndef LOGGING_H
 #define LOGGING_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
@@ -11,19 +15,14 @@
 #include <syslog.h>
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// Global variables declarations - always declare as extern
+// Global variables declarations
 extern bool use_syslog;
 extern bool use_colors;
-extern bool opt_debug;  
-extern bool opt_debug_diff;
-extern bool opt_tracegpu;
+extern bool opt_debug;  // Added missing opt_debug declaration
 extern pthread_mutex_t applog_lock;
+extern char *opt_syslog_pfx;
 
-// Function declarations  
+// Function declarations
 void applog(int prio, const char *fmt, ...);
 void gpulog(int prio, int thr_id, const char *fmt, ...);
 

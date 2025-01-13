@@ -10,10 +10,7 @@
 #ifndef MINER_H
 #define MINER_H
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+#include "config.h"
 
 // Core includes
 #include <stdlib.h>
@@ -130,11 +127,19 @@ struct option
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+// Replace macro definitions with template functions
 #ifndef max
-#define max(a, b) ((a) > (b) ? (a) : (b))
+template<typename T, typename U> 
+static inline auto max(T a, U b) -> decltype(a > b ? a : b) { 
+    return ((a) > (b) ? (a) : (b));
+}
 #endif
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
+
+#ifndef min  
+template<typename T, typename U>
+static inline auto min(T a, U b) -> decltype(a < b ? a : b) { 
+    return ((a) < (b) ? (a) : (b));
+}
 #endif
 
 #ifndef UINT32_MAX
@@ -286,22 +291,29 @@ static inline void le16enc(void *pp, uint16_t x)
  * @brief Global configuration variables controlling mining behavior
  */
 // Global variable declarations
-extern bool opt_benchmark;     ///< Enable benchmark mode
-extern bool opt_quiet;         ///< Reduce logging output
-extern bool opt_protocol;      ///< Show protocol debug information
-extern bool opt_showdiff;      ///< Display share difficulties
-extern int opt_n_threads;
+
+// Remove these duplicate declarations since they're in config.h
+// extern bool opt_benchmark;
+// extern bool opt_quiet;
+// extern bool opt_protocol; 
+// extern bool opt_showdiff;
+// extern int opt_n_threads;
+// extern int opt_timeout;
+// extern bool want_longpoll;
+// extern bool have_longpoll;
+// extern bool want_stratum;
+// extern bool have_stratum;
+// extern bool opt_stratum_stats;
+// extern char *opt_cert;
+// extern char *opt_proxy;
+// extern long opt_proxy_type;
+// extern bool opt_trust_pool;
+// extern uint16_t opt_vote;
+// extern int opt_fail_pause;
+// extern int opt_retries;
+
+// Keep non-duplicated declarations
 extern int active_gpus;
-extern int gpu_threads;
-extern int opt_timeout;
-extern bool want_longpoll;
-extern bool have_longpoll;
-extern bool want_stratum;
-extern bool have_stratum;
-extern bool opt_stratum_stats;
-extern char *opt_cert;
-extern char *opt_proxy;
-extern long opt_proxy_type;
 extern int use_pok;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
@@ -309,10 +321,6 @@ extern int stratum_thr_id;
 extern int api_thr_id;
 extern volatile bool abort_flag;
 extern struct work_restart *work_restart;
-extern bool opt_trust_pool;
-extern uint16_t opt_vote;
-extern int opt_fail_pause;  ///< Pause between retries
-extern int opt_retries;     ///< Number of times to retry
 
 extern uint64_t global_hashrate;
 extern uint64_t net_hashrate;
@@ -363,8 +371,28 @@ extern void restart_threads();                 ///< Restart all mining threads
  */
 extern void format_hashrate(double hashrate, char *output);     ///< Format hashrate for display
 extern void format_hashrate_unit(double hashrate, char *output, const char *unit); ///< Format hashrate with units
-extern void applog(int prio, const char *fmt, ...);            ///< Application logging
-extern void gpulog(int prio, int thr_id, const char *fmt, ...);///< GPU-specific logging
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Move these logging functions inside extern "C" block
+void applog(int prio, const char *fmt, ...);            ///< Application logging
+void gpulog(int prio, int thr_id, const char *fmt, ...);///< GPU-specific logging
+
+// Move work-related functions inside extern "C" block
+bool get_work(struct thr_info *thr, struct work *work);
+bool submit_work(struct thr_info *thr, const struct work *work_in);
+void workio_abort(void);
+void *workio_thread(void *userdata);
+
+// Move scan_for_valid_hashes into extern "C" block
+int scan_for_valid_hashes(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
+
+#ifdef __cplusplus
+}
+#endif
+
 extern void get_currentalgo(char *buf, int sz);
 extern void *aligned_calloc(int size);
 extern void aligned_free(void *ptr);
@@ -395,16 +423,18 @@ extern bool fulltest(const uint32_t *hash, const uint32_t *target);   ///< Test 
 extern void diff_to_target(uint32_t *target, double diff);
 extern void work_set_target(struct work *work, double diff);
 extern double target_to_diff(uint32_t *target);
-extern int scan_for_valid_hashes(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 
-/**
- * @brief Hash target ratio calculation functions
- */
-double bn_convert_nbits(const uint32_t nbits);                ///< Convert nbits to target difficulty
-void bn_nbits_to_uchar(const uint32_t nBits, uchar *target); ///< Convert nbits to target bytes
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 double bn_hash_target_ratio(uint32_t *hash, uint32_t *target);
 void bn_store_hash_target_ratio(uint32_t *hash, uint32_t *target, struct work *work, int nonce);
 void bn_set_target_ratio(struct work *work, uint32_t *hash, int nonce);
+
+#ifdef __cplusplus  
+}
+#endif
 
 /**
  * @brief Network and stratum protocol functions
@@ -459,10 +489,9 @@ void parse_arg(int key, char *arg);
 size_t time2str(char *buf, time_t timer);
 char *atime2str(time_t timer);
 
-void applog_hex(void *data, int len);
-void applog_hash(void *hash);
-void applog_hash64(void *hash);
-void applog_compare_hash(void *hash, void *hash_ref);
+// Remove logging constants and functions that were moved to logging.h
+// Remove LOG_RAW and LOG_BLUE defines
+// Remove applog_hex, applog_hash, applog_hash64, applog_compare_hash declarations
 
 void print_hash_tests(void);
 
@@ -497,7 +526,6 @@ void *workio_thread(void *userdata);
 void initialize_mining_threads(int num_threads);
 
 #ifdef __cplusplus
-}
 #endif
 
 #endif /* MINER_H */

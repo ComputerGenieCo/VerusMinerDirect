@@ -18,7 +18,7 @@ bin_PROGRAMS = VerusMinerDirect
 VerusMinerDirect_SOURCES	= ../src/elist.h ../src/main.h ../src/compat.h \
 			  ../src/compat/inttypes.h ../src/compat/stdbool.h ../src/compat/unistd.h ../src/bignum.cpp ../src/bignum.hpp \
 			  ../src/compat/sys/time.h ../src/compat/getopt/getopt.h \
-			  ../src/crc32.c ../src/signal_handler.cpp ../src/logging.cpp \
+			  ../src/crc32.c ../src/signal_handler.cpp ../src/config.cpp ../src/logging.cpp \
 			  ../src/main.cpp ../src/workio.cpp ../src/pools.cpp ../src/util.cpp \
 			  ../src/api.cpp ../src/hashlog.cpp ../src/stats.cpp ../src/sysinfos.cpp \
 			  ../src/verus/equi-stratum.cpp ../src/verus/verus_hash.cpp \
