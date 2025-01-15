@@ -11,6 +11,7 @@
 
 //#define _GNU_SOURCE
 #define LOGGING_EXTERN
+#include "util.h"
 #include "logging.h"
 #include "miner-config.h"
 #include "constants.h"
@@ -41,7 +42,7 @@
 #include "main.h"
 #include "elist.h"
 #include "logging.h"
-
+#include "verus_stratum.h"
 
 
 extern pthread_mutex_t stratum_sock_lock;
@@ -205,7 +206,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 }
 
 #if LIBCURL_VERSION_NUM >= 0x071200
-static int seek_data_cb(void *user_data, curl_off_t offset, int origin)
+int seek_data_cb(void *user_data, curl_off_t offset, int origin)
 {
 	struct upload_buffer *ub = (struct upload_buffer *)user_data;
 	
@@ -289,7 +290,7 @@ out:
 }
 
 #if LIBCURL_VERSION_NUM >= 0x070f06
-static int sockopt_keepalive_cb(void *userdata, curl_socket_t fd,
+int sockopt_keepalive_cb(void *userdata, curl_socket_t fd,
 	curlsocktype purpose)
 {
 	int keepalive = 1;
@@ -1348,7 +1349,7 @@ static uint32_t getblocheight(struct stratum_ctx *sctx)
 	return height;
 }
 
-static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
+bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 {
 	const char *job_id, *prevhash, *coinb1, *coinb2, *version, *nbits, *stime;
 	const char *extradata = NULL, *solution = NULL;;
@@ -1475,7 +1476,7 @@ out:
 }
 
 extern volatile time_t g_work_time;
-static bool stratum_set_difficulty(struct stratum_ctx *sctx, json_t *params)
+bool stratum_set_difficulty(struct stratum_ctx *sctx, json_t *params)
 {
 	double diff;
 
@@ -1490,7 +1491,7 @@ static bool stratum_set_difficulty(struct stratum_ctx *sctx, json_t *params)
 	return true;
 }
 
-static bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
+bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
 {
 	json_t *port_val;
 	const char *host;
@@ -1516,7 +1517,7 @@ static bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
 	return true;
 }
 
-static bool stratum_pong(struct stratum_ctx *sctx, json_t *id)
+bool stratum_pong(struct stratum_ctx *sctx, json_t *id)
 {
 	char buf[64];
 	bool ret = false;
@@ -1531,7 +1532,7 @@ static bool stratum_pong(struct stratum_ctx *sctx, json_t *id)
 	return ret;
 }
 
-static bool stratum_get_algo(struct stratum_ctx *sctx, json_t *id, json_t *params)
+bool stratum_get_algo(struct stratum_ctx *sctx, json_t *id, json_t *params)
 {
 	char algo[64] = { 0 };
 	char *s;
@@ -1575,7 +1576,7 @@ static bool json_object_set_error(json_t *result, int code, const char *msg)
 }
 
 /* allow to report algo/device perf to the pool for algo stats */
-static bool stratum_benchdata(json_t *result, json_t *params, int thr_id)
+bool stratum_benchdata(json_t *result, json_t *params, int thr_id)
 {
 	char algo[64] = { 0 };
 	char vid[32], arch[8], driver[32];
@@ -1630,7 +1631,7 @@ static bool stratum_benchdata(json_t *result, json_t *params, int thr_id)
 	return true;
 }
 
-static bool stratum_get_stats(struct stratum_ctx *sctx, json_t *id, json_t *params)
+bool stratum_get_stats(struct stratum_ctx *sctx, json_t *id, json_t *params)
 {
 	char *s;
 	json_t *val;
@@ -1658,7 +1659,7 @@ static bool stratum_get_stats(struct stratum_ctx *sctx, json_t *id, json_t *para
 	return ret;
 }
 
-static bool stratum_get_version(struct stratum_ctx *sctx, json_t *id, json_t *params)
+bool stratum_get_version(struct stratum_ctx *sctx, json_t *id, json_t *params)
 {
 	char *s;
 	json_t *val;
@@ -1681,7 +1682,7 @@ static bool stratum_get_version(struct stratum_ctx *sctx, json_t *id, json_t *pa
 	return ret;
 }
 
-static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *params)
+bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *params)
 {
 	char *s;
 	json_t *val;
@@ -1709,7 +1710,7 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 	return ret;
 }
 
-static bool stratum_unknown_method(struct stratum_ctx *sctx, json_t *id)
+bool stratum_unknown_method(struct stratum_ctx *sctx, json_t *id)
 {
 	char *s;
 	json_t *val;

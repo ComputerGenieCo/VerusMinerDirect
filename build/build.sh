@@ -2,7 +2,7 @@
 
 # Simple script to create the Makefile and build
 
-make distclean-local && make clean-local || echo clean
+make distclean-local && make clean-local || echo "Clean failed, continuing anyway"
 
 rm -f Makefile.in config.status VerusMinerDirect
 
