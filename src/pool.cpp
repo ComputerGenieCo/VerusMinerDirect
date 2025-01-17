@@ -65,6 +65,8 @@ struct opt_config_array {
 	{ CFG_NULL, NULL, NULL }
 };
 
+bool conditional_pool_rotate = false;
+
 // store current credentials in pools container
 void pool_set_creds(int pooln)
 {
@@ -376,4 +378,66 @@ void pool_dump_infos()
 		applog(LOG_DEBUG, "POOL %01d: %s USER %s -s %d", i,
 			p->short_url, p->user, p->scantime);
 	}
+}
+
+bool wanna_mine(int thr_id)
+{
+    bool state = true;
+    bool allow_pool_rotate = (thr_id == 0 && num_pools > 1 && !pool_is_switching);
+
+    if (opt_max_temp > 0.0)
+    {
+#ifdef USE_WRAPNVML
+        struct cgpu_info *cgpu = &thr_info[thr_id].gpu;
+        float temp = gpu_temp(cgpu);
+        if (temp > opt_max_temp)
+        {
+            if (!conditional_state[thr_id] && !opt_quiet)
+                gpulog(LOG_INFO, thr_id, "temperature too high (%.0f°c), waiting...", temp);
+            state = false;
+        }
+        else if (opt_max_temp > 0. && opt_resume_temp > 0. && conditional_state[thr_id] && temp > opt_resume_temp)
+        {
+            if (!thr_id && opt_debug)
+                applog(LOG_DEBUG, "temperature did not reach resume value %.1f...", opt_resume_temp);
+            state = false;
+        }
+#endif
+    }
+    if (opt_max_diff > 0.0 && net_diff > opt_max_diff)
+    {
+        int next = pool_get_first_valid(cur_pooln + 1);
+        if (num_pools > 1 && pools[next].max_diff != pools[cur_pooln].max_diff && opt_resume_diff <= 0.)
+            conditional_pool_rotate = allow_pool_rotate;
+        if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
+            applog(LOG_INFO, "network diff too high, waiting...");
+        state = false;
+    }
+    else if (opt_max_diff > 0. && opt_resume_diff > 0. && conditional_state[thr_id] && net_diff > opt_resume_diff)
+    {
+        if (!thr_id && opt_debug)
+            applog(LOG_DEBUG, "network diff did not reach resume value %.3f...", opt_resume_diff);
+        state = false;
+    }
+    if (opt_max_rate > 0.0 && net_hashrate > opt_max_rate)
+    {
+        int next = pool_get_first_valid(cur_pooln + 1);
+        if (pools[next].max_rate != pools[cur_pooln].max_rate && opt_resume_rate <= 0.)
+            conditional_pool_rotate = allow_pool_rotate;
+        if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
+        {
+            char rate[32];
+            format_hashrate(opt_max_rate, rate);
+            applog(LOG_INFO, "network hashrate too high, waiting %s...", rate);
+        }
+        state = false;
+    }
+    else if (opt_max_rate > 0. && opt_resume_rate > 0. && conditional_state[thr_id] && net_hashrate > opt_resume_rate)
+    {
+        if (!thr_id && opt_debug)
+            applog(LOG_DEBUG, "network rate did not reach resume value %.3f...", opt_resume_rate);
+        state = false;
+    }
+    conditional_state[thr_id] = (uint8_t)!state;
+    return state;
 }

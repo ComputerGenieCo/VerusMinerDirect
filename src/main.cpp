@@ -46,6 +46,7 @@
 #include "daemon.h"
 #include "verus_stratum.h"  // Add this include
 #include "threading.h" // Add this include
+#include "pool.h" // Add this include
 
 // Global mutex declarations
 pthread_mutex_t applog_lock;
@@ -98,7 +99,7 @@ bool opt_pool_failover = true;
 volatile bool pool_on_hold = false;
 volatile bool pool_is_switching = false;
 volatile int pool_switch_count = 0;
-bool conditional_pool_rotate = false;
+extern bool conditional_pool_rotate; // Change this line
 
 extern char *opt_scratchpad_url;
 extern char *rpc_user;
@@ -135,7 +136,7 @@ extern bool gbt_work_decode(const json_t *val, struct work *work);
 extern bool get_mininginfo(CURL *curl, struct work *work);
 void *longpoll_thread(void *userdata);
 // Remove the miner_thread function from here
-bool wanna_mine(int thr_id);
+// Remove wanna_mine function from here
 void parse_cmdline(int argc, char *argv[]);
 void get_currentalgo(char *buf, int sz);
 void format_hashrate(double hashrate, char *output);
@@ -146,7 +147,6 @@ void log_hash_rates(int thr_id, uint64_t loopcnt, time_t *tm_rate_log);
 bool handle_stratum_response(char *buf);
 void Clear();
 bool initialize_curl();
-void parse_command_line_arguments(int argc, char *argv[]);
 // Remove the entire initialize_mining_threads function definition
 // void initialize_mining_threads(int num_threads)
 // {
@@ -237,68 +237,6 @@ extern bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work);
 
 // Thread management functions
 
-bool wanna_mine(int thr_id)
-{
-    bool state = true;
-    bool allow_pool_rotate = (thr_id == 0 && num_pools > 1 && !pool_is_switching);
-
-    if (opt_max_temp > 0.0)
-    {
-#ifdef USE_WRAPNVML
-        struct cgpu_info *cgpu = &thr_info[thr_id].gpu;
-        float temp = gpu_temp(cgpu);
-        if (temp > opt_max_temp)
-        {
-            if (!conditional_state[thr_id] && !opt_quiet)
-                gpulog(LOG_INFO, thr_id, "temperature too high (%.0f°c), waiting...", temp);
-            state = false;
-        }
-        else if (opt_max_temp > 0. && opt_resume_temp > 0. && conditional_state[thr_id] && temp > opt_resume_temp)
-        {
-            if (!thr_id && opt_debug)
-                applog(LOG_DEBUG, "temperature did not reach resume value %.1f...", opt_resume_temp);
-            state = false;
-        }
-#endif
-    }
-    if (opt_max_diff > 0.0 && net_diff > opt_max_diff)
-    {
-        int next = pool_get_first_valid(cur_pooln + 1);
-        if (num_pools > 1 && pools[next].max_diff != pools[cur_pooln].max_diff && opt_resume_diff <= 0.)
-            conditional_pool_rotate = allow_pool_rotate;
-        if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
-            applog(LOG_INFO, "network diff too high, waiting...");
-        state = false;
-    }
-    else if (opt_max_diff > 0. && opt_resume_diff > 0. && conditional_state[thr_id] && net_diff > opt_resume_diff)
-    {
-        if (!thr_id && opt_debug)
-            applog(LOG_DEBUG, "network diff did not reach resume value %.3f...", opt_resume_diff);
-        state = false;
-    }
-    if (opt_max_rate > 0.0 && net_hashrate > opt_max_rate)
-    {
-        int next = pool_get_first_valid(cur_pooln + 1);
-        if (pools[next].max_rate != pools[cur_pooln].max_rate && opt_resume_rate <= 0.)
-            conditional_pool_rotate = allow_pool_rotate;
-        if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
-        {
-            char rate[32];
-            format_hashrate(opt_max_rate, rate);
-            applog(LOG_INFO, "network hashrate too high, waiting %s...", rate);
-        }
-        state = false;
-    }
-    else if (opt_max_rate > 0. && opt_resume_rate > 0. && conditional_state[thr_id] && net_hashrate > opt_resume_rate)
-    {
-        if (!thr_id && opt_debug)
-            applog(LOG_DEBUG, "network rate did not reach resume value %.3f...", opt_resume_rate);
-        state = false;
-    }
-    conditional_state[thr_id] = (uint8_t)!state;
-    return state;
-}
-
 // Mining thread implementations
 void log_hash_rates(int thr_id, uint64_t loopcnt, time_t *tm_rate_log) {
 	if (!opt_quiet && loopcnt > 1 && (time(NULL) - *tm_rate_log) > opt_maxlograte) {
@@ -308,153 +246,6 @@ void log_hash_rates(int thr_id, uint64_t loopcnt, time_t *tm_rate_log) {
 			gpulog(LOG_INFO, thr_id, "%s, %s", device_name[device_map[thr_id % MAX_GPUS]], s);
 		*tm_rate_log = time(NULL);
 	}
-}
-
-void *longpoll_thread(void *userdata)
-{
-    struct thr_info *mythr = (struct thr_info *)userdata;
-    struct pool_infos *pool;
-    CURL *curl = NULL;
-    char *hdr_path = NULL, *lp_url = NULL;
-    const char *rpc_req = json_rpc_getwork;
-    bool need_slash = false;
-    int pooln, switchn;
-
-    curl = curl_easy_init();
-    if (unlikely(!curl))
-    {
-        applog(LOG_ERR, "%s() CURL init failed", __func__);
-        goto out;
-    }
-
-wait_lp_url:
-    hdr_path = (char *)tq_pop(mythr->q, NULL);
-    if (!hdr_path)
-        goto out;
-
-    if (!(pools[cur_pooln].type & POOL_STRATUM))
-    {
-        pooln = cur_pooln;
-        pool = &pools[pooln];
-    }
-    else
-    {
-        have_stratum = true;
-    }
-
-    switchn = pool_switch_count;
-
-    if (strstr(hdr_path, "://"))
-    {
-        lp_url = hdr_path;
-        hdr_path = NULL;
-    }
-    else
-    {
-        char *copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
-        if (rpc_url[strlen(rpc_url) - 1] != '/')
-            need_slash = true;
-
-        lp_url = (char *)malloc(strlen(rpc_url) + strlen(copy_start) + 2);
-        if (!lp_url)
-            goto out;
-
-        snprintf(lp_url, strlen(rpc_url) + strlen(copy_start) + 2, "%s%s%s", rpc_url, need_slash ? "/" : "", copy_start);
-    }
-
-    if (!pool_is_switching)
-        applog(LOG_BLUE, "Long-polling on %s", lp_url);
-
-    pool_is_switching = false;
-
-longpoll_retry:
-
-    while (!abort_flag)
-    {
-        json_t *val = NULL, *soval;
-        int err = 0;
-
-        if (opt_debug_threads)
-            applog(LOG_DEBUG, "longpoll %d: %d count %d %d, switching=%d, have_stratum=%d",
-                   pooln, cur_pooln, switchn, pool_switch_count, pool_is_switching, have_stratum);
-
-        if (switchn != pool_switch_count)
-            goto need_reinit;
-
-        val = json_rpc_longpoll(curl, lp_url, pool, rpc_req, &err);
-        if (have_stratum || switchn != pool_switch_count)
-        {
-            if (val)
-                json_decref(val);
-            goto need_reinit;
-        }
-        if (likely(val))
-        {
-            soval = json_object_get(json_object_get(val, "result"), "submitold");
-            submit_old = soval ? json_is_true(soval) : false;
-            pthread_mutex_lock(&g_work_lock);
-            if (work_decode(json_object_get(val, "result"), &g_work))
-            {
-                restart_threads();
-                if (!opt_quiet)
-                {
-                    char netinfo[64] = {0};
-                    if (net_diff > 0.)
-                    {
-                        snprintf(netinfo, sizeof(netinfo), "diff %.3f", net_diff);
-                    }
-                    if (opt_showdiff)
-                    {
-                        snprintf(&netinfo[strlen(netinfo)], sizeof(netinfo) - strlen(netinfo), ", target %.3f", g_work.targetdiff);
-                    }
-                    if (g_work.height)
-                        applog(LOG_BLUE, "%s block %u%s", opt_algo, g_work.height, netinfo);
-                    else
-                        applog(LOG_BLUE, "%s detected new block%s", short_url, netinfo);
-                }
-                g_work_time = time(NULL);
-            }
-            pthread_mutex_unlock(&g_work_lock);
-            json_decref(val);
-        }
-        else
-        {
-            g_work_time = 0;
-            if (err != CURLE_OPERATION_TIMEDOUT)
-            {
-                if (opt_debug_threads)
-                    applog(LOG_DEBUG, "%s() err %d, retry in %s seconds",
-                           __func__, err, opt_fail_pause);
-                sleep(opt_fail_pause);
-                goto longpoll_retry;
-            }
-        }
-    }
-
-out:
-    have_longpoll = false;
-    if (opt_debug_threads)
-        applog(LOG_DEBUG, "%s() died", __func__);
-
-    free(hdr_path);
-    free(lp_url);
-    tq_freeze(mythr->q);
-    if (curl)
-        curl_easy_cleanup(curl);
-
-    return NULL;
-
-need_reinit:
-    have_longpoll = false;
-    if (opt_debug_threads)
-        applog(LOG_DEBUG, "%s() reinit...", __func__);
-    if (hdr_path)
-        free(hdr_path);
-    hdr_path = NULL;
-    if (lp_url)
-        free(lp_url);
-    lp_url = NULL;
-    goto wait_lp_url;
 }
 
 // GUI/Terminal management functions
@@ -484,35 +275,6 @@ bool initialize_curl()
 }
 
 // Command line and configuration parsing functions 
-void parse_command_line_arguments(int argc, char *argv[])
-{
-    int key;
-
-    while (1)
-    {
-#if HAVE_GETOPT_LONG
-        key = getopt_long(argc, argv, short_options, options, NULL);
-#else
-        key = getopt(argc, argv, short_options);
-#endif
-        if (key < 0)
-            break;
-
-        parse_arg(key, optarg);
-    }
-    if (optind < argc)
-    {
-        fprintf(stderr, "%s: unsupported non-option argument '%s' (see --help)\n",
-                argv[0], argv[optind]);
-    }
-
-    parse_config(opt_config);
-
-    if (opt_vote == 9999)
-    {
-        opt_vote = 0;
-    }
-}
 
 // Main application entry point and initialization
 int main(int argc, char *argv[])

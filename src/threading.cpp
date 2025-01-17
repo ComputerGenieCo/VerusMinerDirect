@@ -24,6 +24,7 @@
 #include "logging.h"
 #include "stratum.h"
 #include "workio.h"
+#include "daemon.h"
 
 // External mutex declarations 
 extern pthread_mutex_t applog_lock;
@@ -578,6 +579,153 @@ out:
         applog(LOG_DEBUG, "%s() died", __func__);
     tq_freeze(thr->q);
     return NULL;
+}
+
+void *longpoll_thread(void *userdata)
+{
+    struct thr_info *mythr = (struct thr_info *)userdata;
+    struct pool_infos *pool;
+    CURL *curl = NULL;
+    char *hdr_path = NULL, *lp_url = NULL;
+    const char *rpc_req = json_rpc_getwork;
+    bool need_slash = false;
+    int pooln, switchn;
+
+    curl = curl_easy_init();
+    if (unlikely(!curl))
+    {
+        applog(LOG_ERR, "%s() CURL init failed", __func__);
+        goto out;
+    }
+
+wait_lp_url:
+    hdr_path = (char *)tq_pop(mythr->q, NULL);
+    if (!hdr_path)
+        goto out;
+
+    if (!(pools[cur_pooln].type & POOL_STRATUM))
+    {
+        pooln = cur_pooln;
+        pool = &pools[pooln];
+    }
+    else
+    {
+        have_stratum = true;
+    }
+
+    switchn = pool_switch_count;
+
+    if (strstr(hdr_path, "://"))
+    {
+        lp_url = hdr_path;
+        hdr_path = NULL;
+    }
+    else
+    {
+        char *copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
+        if (rpc_url[strlen(rpc_url) - 1] != '/')
+            need_slash = true;
+
+        lp_url = (char *)malloc(strlen(rpc_url) + strlen(copy_start) + 2);
+        if (!lp_url)
+            goto out;
+
+        snprintf(lp_url, strlen(rpc_url) + strlen(copy_start) + 2, "%s%s%s", rpc_url, need_slash ? "/" : "", copy_start);
+    }
+
+    if (!pool_is_switching)
+        applog(LOG_BLUE, "Long-polling on %s", lp_url);
+
+    pool_is_switching = false;
+
+longpoll_retry:
+
+    while (!abort_flag)
+    {
+        json_t *val = NULL, *soval;
+        int err = 0;
+
+        if (opt_debug_threads)
+            applog(LOG_DEBUG, "longpoll %d: %d count %d %d, switching=%d, have_stratum=%d",
+                   pooln, cur_pooln, switchn, pool_switch_count, pool_is_switching, have_stratum);
+
+        if (switchn != pool_switch_count)
+            goto need_reinit;
+
+        val = json_rpc_longpoll(curl, lp_url, pool, rpc_req, &err);
+        if (have_stratum || switchn != pool_switch_count)
+        {
+            if (val)
+                json_decref(val);
+            goto need_reinit;
+        }
+        if (likely(val))
+        {
+            soval = json_object_get(json_object_get(val, "result"), "submitold");
+            submit_old = soval ? json_is_true(soval) : false;
+            pthread_mutex_lock(&g_work_lock);
+            if (work_decode(json_object_get(val, "result"), &g_work))
+            {
+                restart_threads();
+                if (!opt_quiet)
+                {
+                    char netinfo[64] = {0};
+                    if (net_diff > 0.)
+                    {
+                        snprintf(netinfo, sizeof(netinfo), "diff %.3f", net_diff);
+                    }
+                    if (opt_showdiff)
+                    {
+                        snprintf(&netinfo[strlen(netinfo)], sizeof(netinfo) - strlen(netinfo), ", target %.3f", g_work.targetdiff);
+                    }
+                    if (g_work.height)
+                        applog(LOG_BLUE, "%s block %u%s", opt_algo, g_work.height, netinfo);
+                    else
+                        applog(LOG_BLUE, "%s detected new block%s", short_url, netinfo);
+                }
+                g_work_time = time(NULL);
+            }
+            pthread_mutex_unlock(&g_work_lock);
+            json_decref(val);
+        }
+        else
+        {
+            g_work_time = 0;
+            if (err != CURLE_OPERATION_TIMEDOUT)
+            {
+                if (opt_debug_threads)
+                    applog(LOG_DEBUG, "%s() err %d, retry in %s seconds",
+                           __func__, err, opt_fail_pause);
+                sleep(opt_fail_pause);
+                goto longpoll_retry;
+            }
+        }
+    }
+
+out:
+    have_longpoll = false;
+    if (opt_debug_threads)
+        applog(LOG_DEBUG, "%s() died", __func__);
+
+    free(hdr_path);
+    free(lp_url);
+    tq_freeze(mythr->q);
+    if (curl)
+        curl_easy_cleanup(curl);
+
+    return NULL;
+
+need_reinit:
+    have_longpoll = false;
+    if (opt_debug_threads)
+        applog(LOG_DEBUG, "%s() reinit...", __func__);
+    if (hdr_path)
+        free(hdr_path);
+    hdr_path = NULL;
+    if (lp_url)
+        free(lp_url);
+    lp_url = NULL;
+    goto wait_lp_url;
 }
 
 void initialize_mining_threads(int num_threads)

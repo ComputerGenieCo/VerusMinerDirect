@@ -32,6 +32,8 @@ void *longpoll_thread(void *userdata);
 bool wanna_mine(int thr_id);
 void restart_threads(void);
 
+extern bool conditional_pool_rotate;
+
 #ifdef __cplusplus
 }
 #endif

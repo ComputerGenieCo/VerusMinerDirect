@@ -110,6 +110,7 @@ void parse_cmdline(int argc, char *argv[]);
 void parse_single_opt(int opt, int argc, char *argv[]);
 void show_usage_and_exit(int status);
 void show_version_and_exit(void);
+void parse_command_line_arguments(int argc, char *argv[]);
 
 #ifdef __cplusplus
 }

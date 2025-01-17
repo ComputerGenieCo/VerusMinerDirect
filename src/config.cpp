@@ -934,3 +934,33 @@ void free_config() {
         if (pools[i].pass) free(pools[i].pass);
     }
 }
+
+void parse_command_line_arguments(int argc, char *argv[])
+{
+    int key;
+
+    while (1)
+    {
+#if HAVE_GETOPT_LONG
+        key = getopt_long(argc, argv, short_options, options, NULL);
+#else
+        key = getopt(argc, argv, short_options);
+#endif
+        if (key < 0)
+            break;
+
+        parse_arg(key, optarg);
+    }
+    if (optind < argc)
+    {
+        fprintf(stderr, "%s: unsupported non-option argument '%s' (see --help)\n",
+                argv[0], argv[optind]);
+    }
+
+    parse_config(opt_config);
+
+    if (opt_vote == 9999)
+    {
+        opt_vote = 0;
+    }
+}
