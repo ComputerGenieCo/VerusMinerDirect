@@ -76,6 +76,8 @@ extern double net_diff;
 extern const char *opt_algo;
 extern pthread_mutex_t stats_lock;
 extern double thr_hashrates[];
+extern uint64_t net_hashrate;
+extern uint64_t net_blocks;  // Add this line
 
 // Global variables
 bool stratum_need_reset = false;
@@ -203,6 +205,51 @@ bool work_decode(const json_t *val, struct work *work)
     work->tx_count = use_pok = 0;
 
     cbin2hex(work->job_id, (const char *)&work->data[17], 4);
+
+    return true;
+}
+
+bool gbt_work_decode(const json_t *val, struct work *work)
+{
+    json_t *err = json_object_get(val, "error");
+    if (err && !json_is_null(err))
+    {
+        allow_gbt = false;
+        applog(LOG_INFO, "GBT not supported, block height unavailable");
+        return false;
+    }
+
+    if (!work->height)
+    {
+        json_t *key = json_object_get(val, "height");
+        if (key && json_is_integer(key))
+        {
+            work->height = (uint32_t)json_integer_value(key);
+            if (!opt_quiet && work->height > g_work.height)
+            {
+                if (net_diff > 0.)
+                {
+                    char netinfo[64] = {0};
+                    char srate[32] = {0};
+                    snprintf(netinfo, sizeof(netinfo), "diff %.2f", net_diff);
+                    if (net_hashrate)
+                    {
+                        format_hashrate((double)net_hashrate, srate);
+                        strcat(netinfo, ", net ");
+                        strcat(netinfo, srate);
+                    }
+                    applog(LOG_BLUE, "%s block %d, %s",
+                           opt_algo, work->height, netinfo);
+                }
+                else
+                {
+                    applog(LOG_BLUE, "%s %s block %d", short_url,
+                           opt_algo, work->height);
+                }
+                g_work.height = work->height;
+            }
+        }
+    }
 
     return true;
 }
@@ -604,4 +651,164 @@ bool jobj_binary(const json_t *obj, const char *key, void *buf, size_t buflen)
         return false;
 
     return true;
+}
+
+bool get_mininginfo(CURL *curl, struct work *work)
+{
+    struct pool_infos *pool = &pools[work->pooln];
+    int curl_err = 0;
+
+    if (have_stratum || have_longpoll || !allow_mininginfo)
+        return false;
+
+    json_t *val = json_rpc_call_pool(curl, pool, info_req, false, false, &curl_err);
+
+    if (!val && curl_err == -1)
+    {
+        allow_mininginfo = false;
+        if (opt_debug)
+        {
+            applog(LOG_DEBUG, "getmininginfo not supported");
+        }
+        return false;
+    }
+    else
+    {
+        json_t *res = json_object_get(val, "result");
+        if (res)
+        {
+            json_t *key = json_object_get(res, "difficulty");
+            if (key)
+            {
+                if (json_is_object(key))
+                    key = json_object_get(key, "proof-of-work");
+                if (json_is_real(key))
+                    net_diff = json_real_value(key);
+            }
+            key = json_object_get(res, "networkhashps");
+            if (key && json_is_integer(key))
+            {
+                net_hashrate = json_integer_value(key);
+            }
+            key = json_object_get(res, "netmhashps");
+            if (key && json_is_real(key))
+            {
+                net_hashrate = (uint64_t)(json_real_value(key) * 1e6);
+            }
+            key = json_object_get(res, "blocks");
+            if (key && json_is_integer(key))
+            {
+                net_blocks = json_integer_value(key);
+            }
+        }
+    }
+    json_decref(val);
+    return true;
+}
+
+bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
+{
+    uchar merkle_root[64] = {0};
+    int i;
+
+    if (!sctx->job.job_id)
+    {
+        return false;
+    }
+
+    pthread_mutex_lock(&stratum_work_lock);
+
+    snprintf(work->job_id, sizeof(work->job_id), "%07x %s",
+             be32dec(sctx->job.ntime) & 0xfffffff, sctx->job.job_id);
+    work->xnonce2_len = sctx->xnonce2_size;
+    memcpy(work->xnonce2, sctx->job.xnonce2, sctx->xnonce2_size);
+
+    work->height = sctx->job.height;
+    work->pooln = sctx->pooln;
+
+    for (i = 0; i < sctx->job.merkle_count; i++)
+    {
+        memcpy(merkle_root + 32, sctx->job.merkle[i], 32);
+    }
+
+    for (i = 0; i < (int)sctx->xnonce2_size && !++sctx->job.xnonce2[i]; i++)
+        ;
+
+    memset(work->data, 0, sizeof(work->data));
+    work->data[0] = le32dec(sctx->job.version);
+    for (i = 0; i < 8; i++)
+        work->data[1 + i] = le32dec((uint32_t *)sctx->job.prevhash + i);
+
+    memcpy(&work->data[9], sctx->job.coinbase, 32 + 32);
+    work->data[25] = le32dec(sctx->job.ntime);
+    work->data[26] = le32dec(sctx->job.nbits);
+    memcpy(&work->solution, sctx->job.solution, 1344);
+    memcpy(&work->data[27], sctx->xnonce1, sctx->xnonce1_size & 0x1F);
+    work->data[35] = 0x80;
+
+    if (opt_showdiff || opt_max_diff > 0.)
+        calc_network_diff(work);
+
+    pthread_mutex_unlock(&stratum_work_lock);
+
+    if (opt_difficulty == 0.)
+        opt_difficulty = 1.;
+
+    memcpy(work->target, sctx->job.extra, 32);
+    work->targetdiff = (sctx->job.diff / opt_difficulty);
+
+    if (stratum_diff != sctx->job.diff)
+    {
+        char sdiff[32] = {0};
+        stratum_diff = sctx->job.diff;
+        if (opt_showdiff && work->targetdiff != stratum_diff)
+            snprintf(sdiff, 32, " (%.5f)", work->targetdiff);
+        applog(LOG_BLUE, "Stratum difficulty set to %.0f%s", stratum_diff, sdiff);
+    }
+
+    return true;
+}
+
+bool get_upstream_work(CURL *curl, struct work *work)
+{
+    bool rc = false;
+    struct timeval tv_start, tv_end, diff;
+    struct pool_infos *pool = &pools[work->pooln];
+    const char *rpc_req = json_rpc_getwork;
+    json_t *val;
+
+    gettimeofday(&tv_start, NULL);
+
+    if (opt_debug_threads)
+        applog(LOG_DEBUG, "%s: want_longpoll=%d have_longpoll=%d",
+               __func__, want_longpoll, have_longpoll);
+
+    val = json_rpc_call_pool(curl, pool, rpc_req, want_longpoll, have_longpoll, NULL);
+    gettimeofday(&tv_end, NULL);
+
+    if (have_stratum || unlikely(work->pooln != cur_pooln))
+    {
+        if (val)
+            json_decref(val);
+        return false;
+    }
+
+    if (!val)
+        return false;
+
+    rc = work_decode(json_object_get(val, "result"), work);
+
+    if (opt_protocol && rc)
+    {
+        timeval_subtract(&diff, &tv_end, &tv_start);
+        applog(LOG_DEBUG, "got new work in %.2f ms",
+               (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
+    }
+
+    json_decref(val);
+
+    get_mininginfo(curl, work);
+    get_blocktemplate(curl, work);
+
+    return rc;
 }

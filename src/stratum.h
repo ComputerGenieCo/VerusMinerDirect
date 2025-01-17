@@ -44,6 +44,8 @@ bool jobj_binary(const json_t *obj, const char *key, void *buf, size_t buflen);
 
 int share_result(int result, int pooln, double sharediff, const char *reason);
 bool submit_upstream_work(CURL *curl, struct work *work);
+bool get_mininginfo(CURL *curl, struct work *work);
+bool get_upstream_work(CURL *curl, struct work *work);
 
 #ifdef __cplusplus
 }

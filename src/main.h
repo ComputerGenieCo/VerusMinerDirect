@@ -41,6 +41,7 @@
 #include "types.h"
 #include "workio.h"
 #include "util.h" // Add this include
+#include "threading.h"  // Add this include
 
 // Type definitions
 typedef unsigned char uchar;
@@ -280,6 +281,8 @@ extern struct pool_infos pools[MAX_POOLS];
 extern int num_pools;
 extern volatile int cur_pooln;
 
+extern int app_exit_code;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -375,14 +378,14 @@ void stats_purge_old(void);
 void stats_purge_all(void);
 void stats_getmeminfo(uint64_t *mem, uint32_t *records);
 
-// Thread queue function declarations
-struct thread_q;
-extern struct thread_q *tq_new(void);
+// Remove these declarations since they're now in threading.h:
+/* extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
 extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
+extern void initialize_mining_threads(int num_threads); */
 
 size_t time2str(char *buf, time_t timer);
 char *atime2str(time_t timer);

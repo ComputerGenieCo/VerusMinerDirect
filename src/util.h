@@ -63,10 +63,15 @@ bool stratum_get_stats(struct stratum_ctx *sctx, json_t *id, json_t *params);
 bool stratum_get_version(struct stratum_ctx *sctx, json_t *id, json_t *params);
 bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *params);
 bool stratum_unknown_method(struct stratum_ctx *sctx, json_t *id);
+
+// Remove these declarations since they're now in threading.h:
+/*
 void tq_freeze(struct thread_q *tq);
 void tq_thaw(struct thread_q *tq);
 bool tq_push(struct thread_q *tq, void *data);
 void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
+*/
+
 void get_defconfig_path(char *out, size_t bufsize, char *argv0);
 void format_hashrate_unit(double hashrate, char *output, const char *unit);
 
