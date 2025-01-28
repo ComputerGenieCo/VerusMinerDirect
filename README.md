@@ -14,9 +14,13 @@ which was based on
 
 Which is a lot of words to say "a cobbled pile of bovine excrement" (see, Mike, I *can* use 'G'-rated words, I'm just not going to when demanded).
 
+## Development speed
+
+I'm an old VB coder working on this project in my spare time; if you want it to happen faster, encourage those in the Verus "community" with ccminer and/or C++ experience (pretty much those that should have done this years ago) to get involved with a project that would benefit the Verus community.
+
 ## Purpose
 
-Eventually, this will be an optimized VerusCoin miner that mines directly to the users daemon.  
+Eventually, this will be an optimized VerusCoin miner that mines directly to the user's daemon.  
 That'll happen after I remove all of the extraneous bull shit that shouldn't even be in it.
 
 ### What is or is going to be removed?
